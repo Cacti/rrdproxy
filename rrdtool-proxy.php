@@ -49,7 +49,9 @@ rrd_system__system_boolean_message( 'test: php module \'pcntl\'', $support_pcntl
 $support_gmp = extension_loaded('gmp');
 rrd_system__system_boolean_message( 'test: php module \'gmp\'', $support_gmp, true );
 $support_openssl = extension_loaded('openssl');
-rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl, true );	
+rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl, true );
+$support_zlib = extension_loaded('zlib');
+rrd_system__system_boolean_message( 'test: php module \'zlib\'', $support_zlib, true );
 
 exec("ulimit -n", $max_open_files);
 exec("pidof php", $pid_of_php);
@@ -151,9 +153,6 @@ if(!$rrdp_config['server_id']) {
 /* create a small summary including some hints */
 fwrite(STDOUT, PHP_EOL);
 rrdp_cmd__show_version();
-
-if(!$support_gmp) fwrite(STDOUT, "\033[0;{$color_theme['debug_critical']}m" . '*Enable GMP for PHP to increase RSA encryption/decryption performance' . "\033[0m" . PHP_EOL);
-if(!$support_openssl) fwrite(STDOUT, "\033[0;{$color_theme['debug_critical']}m" . '*Enable OpenSSL for PHP to increase AES encryption/decryption performance' . "\033[0m" . PHP_EOL);
 
 /* signal the parent to exit - we are up and ready */
 @posix_kill( $ppid , SIGUSR1);
@@ -1169,8 +1168,8 @@ function handle_client($ssock, $csock, $ipc_sockets)
         interact($csock, $ipc_socket_parent); 
 
 		/* close client connection */
-		socket_shutdown($csock);
-		socket_close($csock);
+		@socket_shutdown($csock);
+		@socket_close($csock);
 
 		/* send IPC update message to parent */
 		socket_write( $ipc_socket_parent, serialize($rrdp_status));
