@@ -47,11 +47,9 @@ rrd_system__system_boolean_message( 'test: php module \'posix\'', $support_posix
 $support_pcntl = extension_loaded('pcntl');	
 rrd_system__system_boolean_message( 'test: php module \'pcntl\'', $support_pcntl, true );
 $support_gmp = extension_loaded('gmp');
-rrd_system__system_boolean_message( 'test: php module \'gmp\'', $support_gmp );
+rrd_system__system_boolean_message( 'test: php module \'gmp\'', $support_gmp, true );
 $support_openssl = extension_loaded('openssl');
-rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl );	
-$support_mcrypt = extension_loaded('mcrypt');
-rrd_system__system_boolean_message( 'test: php module \'mcrypt\'', $support_mcrypt );	
+rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl, true );	
 
 exec("ulimit -n", $max_open_files);
 exec("pidof php", $pid_of_php);
