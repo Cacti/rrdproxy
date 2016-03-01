@@ -50,7 +50,7 @@ function rrdtool_pipe_close($process) {
     proc_close($process);
 }
 
-function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key) {
+function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $compression) {
     $stdout = '';
     $return_code = fwrite($pipes[0], $command);
 
@@ -58,15 +58,28 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key) {
 		/* pipe broken */
 		return null;
 	}
+	
+	$buffer = '';
 	while (!feof($pipes[1])) {
-		$stdout = fread($pipes[1], 8012);
+		$stdout = fread($pipes[1], 8192);
 		/* don't return empty strings */
 		if($stdout)	{
-			rrdp_system__socket_write( $socket, encrypt($stdout, $client_public_key) . "\r\n");	
+		
+			$buffer .= $stdout;
+			
 			if ( substr_count($stdout, "OK u") ) {
+				rrdp_system__socket_write( $socket, encrypt( ( ($compression === true) ? gzencode($buffer,1) : $buffer ), $client_public_key) . "\r\n");	
 				return true;
 			}elseif ( substr_count($stdout, "ERROR") ) {
+				rrdp_system__socket_write( $socket, encrypt( ( ($compression === true) ? gzencode($buffer,1) : $buffer ), $client_public_key) . "\r\n");	
 				return false;
+			}else {
+				if(strlen($buffer) <= 65536 ) {
+					continue;
+				}else {
+					rrdp_system__socket_write( $socket, encrypt( ( ($compression === true) ? gzencode($buffer,1) : $buffer ), $client_public_key) . "\r\n");
+					$buffer = '';
+				}
 			}
 		}
 	}
@@ -200,7 +213,11 @@ function interact($socket_client, $ipc_socket_parent) {
 										continue;
 									}
 								}else {
-									$input = decrypt(trim($input));
+									
+									$input = (decrypt($input));
+									if(strpos($input, "\x1f\x8b") === 0) {
+										$input = gzdecode($input);
+									}
 								}
 								
 								if (strpos($input, ' ') !== false) {
@@ -229,7 +246,9 @@ function interact($socket_client, $ipc_socket_parent) {
 										$rrdtool_pipes			= $rrdtool_process_pipes[1];
 									}
 									
-									$rrd_exec_status = rrdtool_pipe_execute($cmd . ' ' . $cmd_options . "\r\n", $rrdtool_pipes, $read_socket, $client_public_key);
+									$auto_compression = in_array($cmd, array('xport', 'fetch', 'dump')) ? true : false;
+									
+									$rrd_exec_status = rrdtool_pipe_execute($cmd . ' ' . $cmd_options . "\r\n", $rrdtool_pipes, $read_socket, $client_public_key, $auto_compression);
 									
 									if( $rrd_exec_status === true ) {	
 
