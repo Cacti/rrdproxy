@@ -99,7 +99,7 @@
 		
 		wizard_handle_output(PHP_EOL . 'Checking System Settings...', true);
 		/* detect network interfaces */
-		exec("ifconfig | grep 'inet addr:' |  grep -v 127.0.0.1 | sed -e 's/Bcast//' | sed -e 's/Mask//' | cut -d: -f2", $network_interfaces);
+		exec("ifconfig | grep 'inet ' |  grep -v 127.0.0.1 | sed -e 's/Bcast//' | sed -e 's/Mask//' | cut -d: -f2", $network_interfaces);
 		rrd_system__system_boolean_message( 'test: network interfaces [' . sizeof($network_interfaces) . ']', $network_interfaces, true);
 
 		/* create a Service TCP Stream socket supporting IPv6 and 4 */
