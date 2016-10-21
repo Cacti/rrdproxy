@@ -185,7 +185,7 @@
 		}
 
 		if($refresh_rsa_keys === true) {
-			$rsa = new Crypt_RSA();
+			$rsa = new \phpseclib\Crypt\RSA();
 			$keys = $rsa->createKey(2048);
 			rrd_system__system_boolean_message( 'create: Generate RSA key-pair (2048Bit)', $keys, true );
 			rrd_system__system_boolean_message( '  save: New RSA public key', file_put_contents('./include/public.key', $keys['publickey']), true );
