@@ -196,6 +196,8 @@ socket_set_nonblock($rrdp_client);
 
 rrd_system__system_boolean_message( 'init: tcp client socket', $rrdp_client, true);
 
+socket_listen($rrdp_client); #TODO: This line needs to be removed once replicator is ready
+
 $rrdp_clients = array();
 $rrdp_ipc_sockets = array();
 $rrdp_admin_sockets = array();
