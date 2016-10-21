@@ -34,7 +34,7 @@
 		'backlog' => 10000,
 		'remote_cnn_timeout' => 5,
 		'logging_buffer' => 10000,
-		'path_rra' => './rra',
+		'path_rra' => realpath('./rra'),
 		'path_rrdtool' => '/usr/bin/rrdtool',
 	);
 	
