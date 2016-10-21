@@ -77,7 +77,7 @@ if( !file_exists('./include/config') || $wizard === true ) {
 	/* RRDtool Proxy has already been started ? */
 	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdtool-proxy.php', $output);
 	$not_running = (sizeof($output)>=2) ? false : true;
-#	rrd_system__system_boolean_message( 'test: no proxy instance running', $not_running, true );
+	rrd_system__system_boolean_message( 'test: no proxy instance running', $not_running, true );
 
 	/* check state of required and optional php modules */
 	$support_sockets = extension_loaded('sockets');
@@ -144,7 +144,7 @@ rrdp_system__encryption_init();
 /* keep start-up time in mind ... */
 $rrdp_config['start'] = time();
 /* ... as well as its sync state */
-$rrdp_config['last_sync'] = false;
+$rrdp_config['last_sync'] = true;	# TODO: Has to false once replicator is working faultlessly
 
 declare(ticks = 100);
 
