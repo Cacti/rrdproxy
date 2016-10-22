@@ -176,7 +176,7 @@ if(!$rrdp_admin) {
 }
 @socket_set_option($rrdp_admin, SOL_SOCKET, SO_REUSEADDR, 1);
 if(!@socket_bind($rrdp_admin, $rrdp_config['address'], $rrdp_config['port_admin'])) {
-	rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_admin'] ."'" . PHP_EOL);
+	rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_admin'] ."'" . PHP_EOL . "Error: " . socket_strerror(socket_last_error()) . PHP_EOL );
 };
 socket_set_nonblock($rrdp_admin);
 socket_listen($rrdp_admin);
@@ -190,7 +190,7 @@ if(!$rrdp_client) {
 }
 @socket_set_option($rrdp_client, SOL_SOCKET, SO_REUSEADDR, 1);
 if(!@socket_bind($rrdp_client, $rrdp_config['address'], $rrdp_config['port_client'])) {
-    rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_client'] ."'" . PHP_EOL);
+    rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_client'] ."'" . PHP_EOL . "Error: " . socket_strerror(socket_last_error()) . PHP_EOL );
 };
 socket_set_nonblock($rrdp_client);
 
