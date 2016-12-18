@@ -1,7 +1,7 @@
 <?php
 /*
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2016 The Cacti Group                                 |
+ | Copyright (C) 2004-2017 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -79,27 +79,28 @@ if( !file_exists('./include/config') || $wizard === true ) {
 	$not_running = (sizeof($output)>=2) ? false : true;
 	rrd_system__system_boolean_message( 'test: no proxy instance running', $not_running, true );
 
+	/* RRDtool Cache Daemon has already been started ? */
+	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdcached', $output);
+	$not_running = (sizeof($output)>=2) ? false : true;
+	rrd_system__system_boolean_message( 'test: no cache instance running', $not_running, true );
+
 	/* check state of required and optional php modules */
-	$support_sockets = extension_loaded('sockets');
-	rrd_system__system_boolean_message( 'test: php module \'sockets\'', $support_sockets, true );
-	$support_posix = extension_loaded('posix');
-	rrd_system__system_boolean_message( 'test: php module \'posix\'', $support_posix, true );
-	$support_pcntl = extension_loaded('pcntl');	
-	rrd_system__system_boolean_message( 'test: php module \'pcntl\'', $support_pcntl, true );
-	$support_gmp = extension_loaded('gmp');
-	rrd_system__system_boolean_message( 'test: php module \'gmp\'', $support_gmp, true );
-	$support_openssl = extension_loaded('openssl');
-	rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl, true );
-	$support_zlib = extension_loaded('zlib');
-	rrd_system__system_boolean_message( 'test: php module \'zlib\'', $support_zlib, true );
+	rrd_system__system_boolean_message( 'test: php module \'sockets\'', extension_loaded('sockets'), true );
+	rrd_system__system_boolean_message( 'test: php module \'posix\'', extension_loaded('posix'), true );
+	rrd_system__system_boolean_message( 'test: php module \'pcntl\'', extension_loaded('pcntl'), true );
+	rrd_system__system_boolean_message( 'test: php module \'gmp\'', extension_loaded('gmp'), true );
+	rrd_system__system_boolean_message( 'test: php module \'openssl\'', extension_loaded('openssl'), true );
+	rrd_system__system_boolean_message( 'test: php module \'zlib\'',  extension_loaded('zlib'), true );
+	#rrd_system__system_boolean_message( 'test: php module \'readline\'', extension_loaded('readline'), true );
 
 	exec("ulimit -n", $max_open_files);
 	$pid_of_php = getmypid();		
 	exec("ls -l /proc/$pid_of_php/fd/ | wc -l", $open_files);
 	if($max_open_files[0] == 'unlimited') $max_open_files[0] = 1048576;
-	$max_concurrent_streams = intval($max_open_files[0]-$open_files[0]/2);	
 	
-	rrd_system__system_boolean_message( 'test: max. number of concurrent streams [' . $max_concurrent_streams . ']', $max_concurrent_streams, true );	
+	rrd_system__system_boolean_message( 'test: max. number of open files [' . $max_open_files[0] . ']', $max_open_files[0], true );
+	rrd_system__system_boolean_message( 'test: max. number of connections in backlog [' . SOMAXCONN . ']', SOMAXCONN, true );
+
 }
 
 /* ---------------------------- BEGIN - SYSTEM STARTUP ROUTINE -------------------------------------- */
@@ -181,7 +182,7 @@ if(!@socket_bind($rrdp_admin, $rrdp_config['address'], $rrdp_config['port_admin'
 socket_set_nonblock($rrdp_admin);
 socket_listen($rrdp_admin);
 rrd_system__system_boolean_message( 'init: tcp admin socket', $rrdp_admin, true);
-
+rrdp_system__logging("Start listening to port " . $rrdp_config['address'] . ":" . $rrdp_config['port_admin']);
 
 /* set up a client socket request against RRDtool */
 $rrdp_client = @socket_create( (($rrdp_config['ipv6']) ? AF_INET6 : AF_INET ), SOCK_STREAM, SOL_TCP);
@@ -197,12 +198,48 @@ socket_set_nonblock($rrdp_client);
 rrd_system__system_boolean_message( 'init: tcp client socket', $rrdp_client, true);
 
 socket_listen($rrdp_client); #TODO: This line needs to be removed once replicator is ready
+rrdp_system__logging("Start listening to port " . $rrdp_config['address'] . ":" . $rrdp_config['port_client']);
 
 $rrdp_clients = array();
 $rrdp_ipc_sockets = array();
 $rrdp_admin_sockets = array();
 $rrdp_admin_clients = array();
 $rrdp_ipc_server_sockets = array();
+
+/* start RRDCached if configued */
+if($rrdp_config['path_rrdcached']) {
+
+	$current_working_directory = realpath('');
+	$rrdcached_cmd = $rrdp_config['path_rrdcached']
+					. ' -l unix:' . $current_working_directory . '/run/rrdcached.sock'
+					. ' -w ' . $rrdp_config['rrdcache_update_cycle']
+					. ($rrdp_config['rrdcache_update_delay'] ? ' -z ' . $rrdp_config['rrdcache_update_delay'] : '')
+					. ' -f ' . $rrdp_config['rrdcache_life_cycle']
+					. ' -p ' . $current_working_directory . '/run/rrdcached.pid'
+					. ' -t ' . $rrdp_config['rrdcache_write_threads']
+					. ' -j ' . $current_working_directory . '/run/journal'
+					. ' -b ' . $rrdp_config['path_rra']
+					. ' -O';
+
+	rrdp_system__logging("INIT: RRDcached daemon - " . $rrdcached_cmd);
+	$rrdcached = proc_open($rrdcached_cmd,[1 => ['pipe','w'],2 => ['pipe','w']],$pipes);
+
+	$stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+    proc_close($rrdcached);
+
+	/* Feedback from replicator required - let's wait for a sec */
+	usleep(1000000);
+	$rrdcached_pid = file_exists($current_working_directory .'/run/rrdcached.pid')  ? trim(file_get_contents($current_working_directory .'/run/rrdcached.pid')) : 0;
+	rrd_system__system_boolean_message( 'init: rrdcached daemon [PID: ' . $rrdcached_pid .']', $rrdcached_pid, false);
+
+	if( $stderr ) rrdp_system__logging('ERROR: RRDcached daemon - ' . $stderr);
+	if( $rrdcached_pid ) rrdp_system__logging('STATUS: RRDcached daemon [PID: ' . $rrdcached_pid .'] running.');
+}else {
+	$rrdcached_pid = 0;
+}
 
 /* start replicator */
 socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $ipc_sockets);
@@ -213,8 +250,15 @@ $rrdp_clients[$rrdp_replicator_pid]['ip'] = '127.0.0.1';
 $rrdp_clients[$rrdp_replicator_pid]['ipc'] = $key;
 $rrdp_ipc_sockets[$key] = $ipc_sockets;
 
-/* Feedback from replicator required - let's wait for half a sec */
-usleep(500000);
+/* Feedback from replicator required - let's wait for a sec */
+usleep(1000000);
+
+/* limit the number max. connections in relation to the number of open files this system supports */
+exec("ulimit -n", $max_open_files);
+$pid_of_php = getmypid();
+exec("ls -l /proc/$pid_of_php/fd/ | wc -l", $open_files);
+if($max_open_files[0] == 'unlimited') $max_open_files[0] = 1048576;
+$rrdp_config['max_cnn'] = intval(($max_open_files[0]-$open_files[0])/2-$rrdp_config['max_admin_cnn']*2-100);	#buffer of 100 open files
 
 /* return version info to give admins a summary of our setup */
 fwrite(STDOUT, PHP_EOL);
@@ -223,10 +267,8 @@ fwrite(STDOUT, '________________________________________________________________
 
 /* signal the parent to exit - now we are up and ready */
 @posix_kill( $ppid , SIGUSR1);
+
 /* ---------------------------- END - SYSTEM STARTUP ROUTINE ---------------------------- */
-
-
-
 
 while($__server_listening) {
 
@@ -295,6 +337,11 @@ while($__server_listening) {
 						rrdp_system__count('aborted_connects');
 						rrdp_system__debug('Default connection request #' . $key . '[IP: ' . $ip . '] rejected.', 'ACL', 'debug_warning');
 					}
+				}else {
+					rrdp_system__logging('Critical: Maximum number of client connections has been exhausted. Check system setup ("ulimit -n")!');
+					$socket_descriptor = socket_accept($read_socket);
+					@socket_write($socket_descriptor, "ERROR: Too many open connections.\r\n");
+					@socket_close($socket_descriptor);
 				}
 			}else if($read_socket == $rrdp_admin) {
 			
@@ -583,7 +630,7 @@ function rrdp_system__check() {
 		/* Status - Filesystem RRA */
 		if(is_dir($rrdp_config['path_rra'])) {
 		
-			$rra_disk_status = shell_exec( "df " . $rrdp_config['path_rra'] . " | grep -v Filesystem| awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'" );
+			$rra_disk_status = shell_exec( "df -k " . $rrdp_config['path_rra'] . " | sed 1d | awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'" );
 			$disk_states = explode(' ', $rra_disk_status);
 			if( is_array( $disk_states ) && sizeof($disk_states)>0 ) {
 				foreach($disk_states as $disk_state) {
@@ -599,7 +646,7 @@ function rrdp_system__check() {
 		}
 		
 		/* Status - Filesystem MSR */
-		$msr_disk_status = shell_exec( "df ./msr | grep -v Filesystem| awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'" );
+		$msr_disk_status = shell_exec( "df -k ./msr | sed 1d | awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'" );
 		$disk_states = explode(' ', $msr_disk_status);
 		if( is_array( $disk_states ) && sizeof($disk_states)>0 ) {
 			foreach($disk_states as $disk_state) {
@@ -659,7 +706,7 @@ function rrdp_system__replicator(&$input) {
 			break;
 			case 'status':
 				if( $status['status'] == 'running' ) {
-					@socket_listen($rrdp_client, $rrdp_config['backlog']);
+					@socket_listen($rrdp_client);
 				}elseif ($status['status'] == 'synchronizing') {
 					@socket_shutdown($rrdp_client);					
 				}
@@ -876,6 +923,7 @@ function rrdp_system__logging($msg) {
 	/* keep an eye on the number of rows we are allowed to store */
 	if( sizeof($rrdp_logging_buffer) == $rrdp_config['logging_buffer'] ) {
 		$waste = array_shift($rrdp_logging_buffer);
+		unset($waste);
 	}
 	$rrdp_logging_buffer[] = date(DATE_RFC822) . "    " . $msg;
 	return;
@@ -969,7 +1017,7 @@ function rrdp_cmd__quit( $socket, $args) {
 }
 
 function rrdp_cmd__shutdown( $socket, $args) {
-	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdp_replicator_pid, $microtime_start;
+	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdp_replicator_pid, $rrdcached_pid, $microtime_start;
 	
 	if(!$args) {
 		$i = intval($socket);
@@ -983,6 +1031,20 @@ function rrdp_cmd__shutdown( $socket, $args) {
 			socket_close($rrdp_client);
 			rrd_system__system_boolean_message( 'close: Client socket', true, false );
 			
+			if($rrdcached_pid) {
+				rrd_system__system_boolean_message( ' stop: RRDCached daemon', true, false );
+				posix_kill($rrdcached_pid, SIGTERM);
+				while(1){
+					$child_status = pcntl_waitpid($rrdcached_pid, $status);
+					if($child_status == -1 || $child_status > 0) {
+						rrd_system__system_boolean_message( " stop: [PID:$rrdcached_pid] RRDCached daemon stopped", 1, false);
+						break;
+					}else {
+						sleep(1);
+					}
+				}
+			}
+
 			if($rrdp_replicator_pid) {
 				$key = $rrdp_clients[$rrdp_replicator_pid]['ipc'];
 				if(isset($rrdp_ipc_sockets[ $key ]) && is_resource($rrdp_ipc_sockets[ $key ][1])) {
@@ -1211,7 +1273,7 @@ function rrdp_cmd__show_msr($socket, $args) {
 }
 
 function rrdp_cmd__show_version($socket=false) {
-	global $rrdp_config, $rrdp_encryption;
+	global $rrdp_config, $rrdp_clients, $rrdp_encryption;
 	
 	$runtime = time() - $rrdp_config['start']; 
 	$days = floor( $runtime / 86400 );
@@ -1235,11 +1297,12 @@ function rrdp_cmd__show_version($socket=false) {
 			." Copyright (C) 2004-2016 The Cacti Group" . PHP_EOL
 			." {$rrdp_config['name']} uptime is $days days, $hours hours, $minutes minutes, $seconds seconds" . PHP_EOL
 			." Memory usage " . $memory_usage . " % (" . $memory_used . "/" . $memory_limit ." in bytes)" . PHP_EOL
-			." " . $rrdp_encryption['public_key_fingerprint'] . PHP_EOL . PHP_EOL
+			." " . $rrdp_encryption['public_key_fingerprint'] . PHP_EOL
+			." Session usage (" . sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")" . PHP_EOL . PHP_EOL
 			." Server IP [" . gethostbyname(php_uname('n')) . "]" . PHP_EOL
-			." Administration: ['localhost' <ipv" . ($rrdp_config['ipv6'] ? '6' : '4' ) . '> :' . $rrdp_config['port_admin'] . ']' . PHP_EOL
-			." Replication:    ['" . ($rrdp_config['address'] ? $rrdp_config['address'] : 'any') . "' <ipv" . ($rrdp_config['ipv6'] ? '6' : '4' ) . '> :' . $rrdp_config['port_server'] . ']' . PHP_EOL
-			." Clients:        ['" . ($rrdp_config['address'] ? $rrdp_config['address'] : 'any') . "' <ipv" . ($rrdp_config['ipv6'] ? '6' : '4' ) . '> :' . $rrdp_config['port_client'] . ']' . PHP_EOL
+			." Administration: [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_admin'] . ']' . PHP_EOL
+			." Replication:    [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_server'] . ']' . PHP_EOL
+			." Clients:        [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_client'] . ']' . PHP_EOL
 			. PHP_EOL;
 	
 	if(is_resource($socket)) {
@@ -1341,7 +1404,7 @@ function rrdp_cmd__set_cluster($socket, $args) {
 	if(isset($args[1])) {
 		switch($args[1]) {
 			case 'add':		
-				if( sizeof($args) == 4 ) {
+				if( sizeof($args) == 5 ) {
 					
 					/* Verify IP address */
 					if(filter_var($args[2],FILTER_VALIDATE_IP) === false){
@@ -1539,16 +1602,20 @@ function rrdp_cmd__set_rsa($socket, $args) {
   */ 
 function handle_client($ssock, $csock, $ipc_sockets) 
 { 
-    GLOBAL $__server_listening, $rrdp_status; 
+    GLOBAL $__server_listening, $rrdp_status, $rrdcached_pid;
 
 	list($ipc_socket_parent, $ipc_socket_child) = $ipc_sockets;
+	
+	#rrdp_system__logging('DEBUG: Client Handler started.');
     
     $pid = pcntl_fork(); 
 
     if ($pid == -1) { 
         
 		/* === fork failed === */ 
+        rrdp_system__logging('DEBUG: Client Handler - Fork failed.');
         die; 										//TODO: handling missing
+        
 	
 	}elseif ($pid == 0) { 
 
@@ -1662,7 +1729,7 @@ function handle_replicator($ipc_sockets)
 function display_help () {
 	$output = "\r\n"
 			. " RRDtool Proxy v" . RRDP_VERSION . "\r\n"
-			. " Copyright (C) 2004-2016 The Cacti Group\r\n"
+			. " Copyright (C) 2004-2017 The Cacti Group\r\n"
 			. " usage: rrdtool-proxy.php [--wizard] [-w] [--version] [-v]\r\n"
 			. " Optional:\r\n"
 			. " -v --version   - Display this help message\r\n"

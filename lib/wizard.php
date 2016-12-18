@@ -1,7 +1,7 @@
 <?php
 /*
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2016 The Cacti Group                                 |
+ | Copyright (C) 2004-2017 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -29,13 +29,16 @@
 		'port_client' => 40301,
 		'port_server' => 40302,
 		'port_admin' => 40303,
-		'max_cnn' => 10000,
 		'max_admin_cnn' => 5,
-		'backlog' => 10000,
 		'remote_cnn_timeout' => 5,
 		'logging_buffer' => 10000,
 		'path_rra' => realpath('./rra'),
 		'path_rrdtool' => '/usr/bin/rrdtool',
+		'path_rrdcached' => '/usr/bin/rrdcached',
+		'rrdcache_update_cycle' => 600,
+		'rrdcache_update_delay' => 0,
+		'rrdcache_life_cycle' => 7200,
+		'rrdcache_write_threads' => 4,
 	);
 	
 	wizard();
@@ -54,7 +57,7 @@
 		require_once('Crypt/Rijndael.php');
 		
 		#### -- WELCOME -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              1/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              1/7 \033[0m", false, true, true);
 		$msg = 'Welcome to the Wizard of the RRDtool Proxy Server brought to you by the Cacti Group. '
 			 . 'This tool allows you to setup the RRDtool Proxy Server for the first time as well as to reconfigure an existing configuration. '
 			 . 'You can abort this script anytime with CTRL+C and restart this wizard with following command: <path_to_php> ./rrdtool-proxy.php --wizard' . PHP_EOL . PHP_EOL
@@ -68,7 +71,7 @@
 		wizard_handle_input("\033[1mPress ENTER to continue ...\033[0m", FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;		
 
 	#### -- SYSTEM REQUIREMENTS -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              2/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              2/7 \033[0m", false, true, true);
 		wizard_handle_output('Checking System Requirements...', true);
 		
 		$microtime_start = microtime(true);		// reset system start time	
@@ -76,26 +79,20 @@
 		rrd_system__system_boolean_message( 'test: operation system supported', $support_os, true );
 
 		/* check state of required and optional php modules */
-		$support_sockets = extension_loaded('sockets');
-		rrd_system__system_boolean_message( 'test: php module \'sockets\'', $support_sockets, true );
-		$support_posix = extension_loaded('posix');
-		rrd_system__system_boolean_message( 'test: php module \'posix\'', $support_posix, true );
-		$support_pcntl = extension_loaded('pcntl');	
-		rrd_system__system_boolean_message( 'test: php module \'pcntl\'', $support_pcntl, true );
-		$support_gmp = extension_loaded('gmp');
-		rrd_system__system_boolean_message( 'test: php module \'gmp\'', $support_gmp, true );
-		$support_openssl = extension_loaded('openssl');
-		rrd_system__system_boolean_message( 'test: php module \'openssl\'', $support_openssl, true );
-		$support_zlib = extension_loaded('zlib');
-		rrd_system__system_boolean_message( 'test: php module \'zlib\'', $support_zlib, true );
+		rrd_system__system_boolean_message( 'test: php module \'sockets\'', extension_loaded('sockets'), true );
+		rrd_system__system_boolean_message( 'test: php module \'posix\'', extension_loaded('posix'), true );
+		rrd_system__system_boolean_message( 'test: php module \'pcntl\'', extension_loaded('pcntl'), true );
+		rrd_system__system_boolean_message( 'test: php module \'gmp\'', extension_loaded('gmp'), true );
+		rrd_system__system_boolean_message( 'test: php module \'openssl\'', extension_loaded('openssl'), true );
+		rrd_system__system_boolean_message( 'test: php module \'zlib\'', extension_loaded('zlib'), true );
+		#rrd_system__system_boolean_message( 'test: php module \'readline\'', extension_loaded('readline'), true );
 
 		exec("ulimit -n", $max_open_files);
 		$pid_of_php = getmypid();		
 		exec("ls -l /proc/$pid_of_php/fd/ | wc -l", $open_files);
 		if($max_open_files[0] == 'unlimited') $max_open_files[0] = 1048576;
-		$max_concurrent_streams = intval($max_open_files[0]-$open_files[0]/2);
-		rrd_system__system_boolean_message( 'test: max. number of concurrent streams [' . $max_concurrent_streams . ']', $max_concurrent_streams, true );
-
+		rrd_system__system_boolean_message( 'test: max. number of open files [' . $max_open_files[0] . ']', $max_open_files[0], true );
+		rrd_system__system_boolean_message( 'test: max. number of connections in backlog [' . SOMAXCONN . ']', SOMAXCONN, true );
 		
 		wizard_handle_output(PHP_EOL . 'Checking System Settings...', true);
 		/* detect network interfaces */
@@ -151,7 +148,7 @@
 		
 	
 	#### -- DATA ENCRYPTION -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              3/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              3/7 \033[0m", false, true, true);
 
 		$microtime_start = microtime(true);		// reset system start time	
 		
@@ -197,7 +194,7 @@
 
 		
 	#### -- SYSTEM Parameters -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              3/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              4/7 \033[0m", false, true, true);
 
 		$msg = 'This section allows to modify different system and connection parameters of RRDproxy. If your have any doubts whether you should modify a value or not '
 		     . 'you can go on with the default value shown in square brackets by just pressing ENTER. ';
@@ -292,12 +289,6 @@
 				'pattern' => '/^$|^([1-9]|10)$/',
 				'help' => '% Range 1 - 10'
 			),
-			'backlog' => array(
-				'msg' => "\033[1;32mg)\033[0m If the number of available socket streams is exhausted the RRDproxy allows to keep a couple of requests on hold while waiting for resources. Choose the size of that backlog [%s]:",
-				'filter' => FILTER_VALIDATE_REGEXP,
-				'pattern' => '/^$|^([1-9]\d{3,4}|100000)$/',
-				'help' => '% Range 1 000 - 100 000'
-			),
 			'remote_cnn_timeout' => array(
 				'msg' => "\033[1;32mh)\033[0m Timeout value for client to proxy connections in seconds [%s]:",
 				'filter' => FILTER_VALIDATE_REGEXP,
@@ -342,6 +333,80 @@
 			}
 		}
 		
+	#### -- Cache Settings -- ####
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              5/7 \033[0m", false, true, true);
+		$msg = 'If you are not making use of other I/O caches like Cacti-BOOST you can setup the proxy to manage a caching daemon, "RRDcached", offered by RRDtool itself.'
+			 . 'Using RRDcache will reduce dramatically the I/O load of your file system and avoid, if configured correctly, '
+			 . 'that RRD files will be updated with every update command being received.';
+		wizard_handle_output( wordwrap($msg, 75), true, true);
+
+		$msg = "\033[1mWould you like to enable the use of RRDCached? [y/n]\033[0m";
+
+		$pattern = '/[yYnN]/';
+		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
+		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
+		if($input == 'Y') {
+
+			$rrdp_rrdcached_config_inputs = array(
+				'path_rrdcached' => array(
+					'msg' => "\033[1;32ma)\033[0m Absolute(!) path to your RRDCached binary [%s]:",
+					'filter' => FILTER_CALLBACK,
+					'filter_options' => 'wizard_verify_rrdcached'
+				),
+				'rrdcache_update_cycle' => array(
+					'msg' => "\033[1;32mb)\033[0m Threshold in seconds mesaurements of an active polling object will be keept in memory. If breached related cached data will be written to disk.[%s]:",
+					'filter' => FILTER_VALIDATE_REGEXP,
+					'pattern' => '/^$|^([1-9]\d{1,3}|10000)$/',
+					'help' => '% Range 10 - 10 000'
+				),
+				'rrdcache_update_delay' => array(
+					'msg' => "\033[1;32mc)\033[0m A random delay between 0 and x seconds RRDcache will delay writing of each RRD to avoid too many writes being queued simultaneously. By default, there is no delay.[%s]:",
+					'filter' => FILTER_VALIDATE_REGEXP,
+					'pattern' => '/^$|^(0|[1-9]\d{1}|10)$/',
+					'help' => '% Range 0 - 10'
+				),
+				'rrdcache_life_cycle' => array(
+					'msg' => "\033[1;32md)\033[0m Define the number of seconds RRDcached should scan the complete cache to ensure that measurements no longer being updated will be written to disk. This process is CPU intensive and should not be executed too often. Due to that reason a high value of e.g. 7200 is acceptable in most cases.[%s]:",
+					'filter' => FILTER_VALIDATE_REGEXP,
+					'pattern' => '/^$|^([1-9]\d{3}|10000)$/',
+					'help' => '% Range 1 000 - 10 000'
+				),
+				'rrdcache_write_threads' => array(
+					'msg' => "\033[1;32me)\033[0m Specify the number of write threads used for writing RRD files. Increasing this number will allow RRDCached to have more simultaneous I/O requests into the kernel. Default value is 4.[%s]:",
+					'filter' => FILTER_VALIDATE_REGEXP,
+					'pattern' => '/^$|^([1-9]\d{1}|10)$/',
+					'help' => '% Range 1 - 10'
+				),
+
+			);
+
+			wizard_handle_output( "\033[1mSettings:\033[0m", false, false);
+			foreach( $active_config as $attribute => $value ) {
+				if(isset($rrdp_rrdcached_config_inputs[$attribute])) {
+
+					if(isset($rrdp_rrdcached_config_inputs[$attribute]['filter_options'])) {
+						$filter_options['options'] = $rrdp_rrdcached_config_inputs[$attribute]['filter_options'];
+					}else {
+						$filter_options = array();
+						if($rrdp_rrdcached_config_inputs[$attribute]['filter'] == FILTER_VALIDATE_REGEXP) {
+							$filter_options = array('options'=>array('regexp'=>$rrdp_rrdcached_config_inputs[$attribute]['pattern']));
+						}
+					}
+					$input = wizard_handle_input( wordwrap( sprintf($rrdp_rrdcached_config_inputs[$attribute]['msg'], $value), 75), $rrdp_rrdcached_config_inputs[$attribute]['filter'], $filter_options, (isset($rrdp_rrdcached_config_inputs[$attribute]['help']) ? $rrdp_rrdcached_config_inputs[$attribute]['help'] : false), true);
+					if($input) {
+						$active_config[$attribute] = $input;
+					}
+					file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
+				}
+			}
+
+		}else {
+			$active_config['path_rrdcached'] = '';
+			file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
+		}
+		wizard_handle_output( '', true, true);
+
+
 		$filter_options = array('options' => array('regexp' => '/[\s]*/'));
 		wizard_handle_input( PHP_EOL . "\033[1mPress ENTER to save new system configuration ...\033[0m", FILTER_VALIDATE_REGEXP, $filter_options, false, true );
 		$microtime_start = microtime(true);	// reset system start time	
@@ -352,11 +417,11 @@
 		wizard_handle_input( PHP_EOL . "\033[1mPress ENTER to continue ...\033[0m", FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;	
 		
 	#### -- Client Connections -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              5/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              6/7 \033[0m", false, true, true);
 		$msg = 'This version does not support the automatic registration of new trusted clients - these have to be defined manually. '
 			 . 'To decide whether a client has the permission to access RRDs through the proxy its IP address as well as the fingerprint '
 			 . 'of its current public RSA key has to be registered to RRDproxy.' .  PHP_EOL 
-			 . 'Please note: Every kind of external device, like a Cacti poller for example, is a RRDproxy client. Other RRDproxies have to be registered in section 6.';
+			 . 'Please note: Every kind of external device, like a Cacti poller for example, is a RRDproxy client. Other RRDproxies have to be registered in section 7.';
 		wizard_handle_output( wordwrap($msg, 75), true, true);
 		
 		if($system__clients) {
@@ -420,7 +485,7 @@
 		
 		
 	#### -- Proxy-2-Proxy Connections -- ####
-		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              6/6 \033[0m", false, true, true);
+		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              7/7 \033[0m", false, true, true);
 		$msg = 'This version does not support the automatic registration of new proxy cluster members - these have to be defined manually. '
 			 . 'To decide whether a cluster member has the correct permissions its IP address as well as the fingerprint of its current public RSA key has to be registered to the RRDproxy.';
 		wizard_handle_output( wordwrap($msg, 75), true, true);
@@ -526,6 +591,31 @@
 		}
 	}
 	
+	function wizard_verify_rrdcached($path) {
+		global $active_config;
+
+		$valid_path = false;
+		if(!$path) $path = $active_config['path_rrdcached'];
+
+		/* Get RRDtool version */
+		if( strpos( $path, '.' ) === 0 ) {
+			$msg = "Path is not absolute.";
+		}elseif ( !file_exists($path) ) {
+			$msg = "File not found";
+		}elseif ( !is_executable($path) ) {
+			$msg = "File is not executable.";
+		}else {
+			$valid_path = true;
+		}
+
+		if($valid_path) {
+			return $path;
+		}else {
+			wizard_handle_output("\033[0;31m%$msg\033[0m" . PHP_EOL);
+			return false;
+		}
+	}
+
 	function wizard_verify_path($path) {
 		global $active_config;
 		

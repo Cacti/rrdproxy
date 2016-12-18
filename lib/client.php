@@ -1,7 +1,7 @@
 <?php
 /*
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2016 The Cacti Group                                 |
+ | Copyright (C) 2004-2017 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -23,11 +23,13 @@
 */
 
 function interact($socket_client, $ipc_socket_parent) {
+
     /* 
 		Clients using the default port are only allowed to talk to RRDtool directly.
 		But the child will keep the parent up-to-date by using IPC.
 	*/ 
-	global $rrdp_config, $rrdp_encryption, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdtool_msr_cmds, $rrdp_remote_clients, $rrdp_status, $rrdtool_env_vars, $rrdp_client_cnn_params;
+	global $rrdcached_pid, $rrdp_config, $rrdp_encryption, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdtool_msr_cmds, $rrdp_remote_clients, $rrdp_status, $rrdtool_env_vars, $rrdp_client_cnn_params;
+	if($rrdcached_pid) putenv('RRDCACHED_ADDRESS=unix:' . realpath('') . '/run/rrdcached.sock');
 
 	$rrdp_status_backup = $rrdp_status;
 	$cmd_multiline = false;
