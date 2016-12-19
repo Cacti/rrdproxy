@@ -1619,17 +1619,18 @@ function handle_client($ssock, $csock, $ipc_sockets)
 	
 	}elseif ($pid == 0) { 
 
-		/* === child === */ 
-		include('./lib/functions.php');
+	    	/* === child === */ 
+	
+	    	/* limit memory consumption */
+		ini_set("memory_limit", "8M");
+	    	
+	    	include('./lib/functions.php');
 		include('./lib/client.php');
 	     
 		/* stop main loop, because we have to reuse the same code base */
 		$__server_listening = false;
 
-		/* limit memory consumption */
-		ini_set("memory_limit", "4M");
-		
-		/* free up unused resources */
+	    	/* free up unused resources */
 		socket_close($ssock);
 		socket_close($ipc_socket_child);
 				
