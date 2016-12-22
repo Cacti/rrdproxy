@@ -1619,11 +1619,7 @@ function handle_client($ssock, $csock, $ipc_sockets)
 	
 	}elseif ($pid == 0) { 
 
-	    	/* === child === */ 
-	
-	    	/* limit memory consumption */
-		ini_set("memory_limit", "8M");
-	    	
+	    	/* === child === */   	
 	    	include('./lib/functions.php');
 		include('./lib/client.php');
 	     
@@ -1638,7 +1634,7 @@ function handle_client($ssock, $csock, $ipc_sockets)
 		$rrdp_status = array( 'bytes_received' => 0, 'bytes_sent' => 0, 'queries_rrdtool_total' => 0, 'queries_rrdtool_valid' => 0, 'queries_rrdtool_invalid' => 0, 'rrd_pipe_broken' => 0, 'status' => 'RUNNING');
 		
 		/* handle client parent and child communication */
-        interact($csock, $ipc_socket_parent); 
+        	interact($csock, $ipc_socket_parent); 
 
 		/* close client connection */
 		@socket_shutdown($csock);
