@@ -28,7 +28,7 @@ function interact($socket_client, $ipc_socket_parent) {
 		Clients using the default port are only allowed to talk to RRDtool directly.
 		But the child will keep the parent up-to-date by using IPC.
 	*/ 
-	global $rrdcached_pid, $rrdp_config, $rrdp_encryption, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdtool_msr_cmds, $rrdp_remote_clients, $rrdp_status, $rrdtool_env_vars, $rrdp_client_cnn_params;
+	global $rrdcached_pid, $rrdp_config, $rrdp_encryption, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdtool_msr_cmds, $rrdp_remote_clients, $rrdp_remote_proxies, $rrdp_status, $rrdtool_env_vars, $rrdp_client_cnn_params;
 	if($rrdcached_pid) putenv('RRDCACHED_ADDRESS=unix:' . realpath('') . '/run/rrdcached.sock');
 
 	$rrdp_status_backup = $rrdp_status;
@@ -155,7 +155,7 @@ function interact($socket_client, $ipc_socket_parent) {
 										rrdp_system__count('queries_rrdtool_valid');
 									
 										/* update local cache by valid RRDtool commands for MSR */
-										if( in_array($cmd , $rrdtool_msr_cmds) === true) {
+										if( sizeof($rrdp_remote_proxies)>0 && in_array($cmd , $rrdtool_msr_cmds) === true) {
 											list($mtime,$time) = explode(' ',microtime());
 											$offset = $time %10;
 											$block = $time - $offset + 10;
