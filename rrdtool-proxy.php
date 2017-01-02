@@ -139,6 +139,12 @@ require_once('Crypt/Random.php');
 require_once('Crypt/RSA.php');
 require_once('Crypt/Rijndael.php');
 
+/* install signal handler */
+pcntl_signal(SIGHUP, "rrdp_sig_handler");
+pcntl_signal(SIGTERM, "rrdp_sig_handler");
+pcntl_signal(SIGUSR1, "rrdp_sig_handler");
+pcntl_signal(SIGUSR2, "rrdp_sig_handler");
+
 /* initiate RSA encryption */
 rrdp_system__encryption_init();
 
@@ -176,7 +182,7 @@ if(!$rrdp_admin) {
 	rrd_system__system_die( PHP_EOL . "Unable to create socket. Error: " . socket_strerror(socket_last_error()) . PHP_EOL);
 }
 @socket_set_option($rrdp_admin, SOL_SOCKET, SO_REUSEADDR, 1);
-if(!@socket_bind($rrdp_admin, $rrdp_config['address'], $rrdp_config['port_admin'])) {
+if(!@socket_bind($rrdp_admin, (($rrdp_config['ipv6']) ? '::1' : '127.0.0.1'), $rrdp_config['port_admin'])) {
 	rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_admin'] ."'" . PHP_EOL . "Error: " . socket_strerror(socket_last_error()) . PHP_EOL );
 };
 socket_set_nonblock($rrdp_admin);
@@ -309,6 +315,7 @@ while($__server_listening) {
 	}
 	
     $ready = socket_select($read, $write, $except, $tv_sec);
+	pcntl_signal_dispatch();
 	if($ready) {
 		foreach($read as $read_socket_index => $read_socket) {
 			if($read_socket == $rrdp_client) {
@@ -588,25 +595,30 @@ function rrdp_msr__block_write() {
 	$current_time = time();
 	$current_timeframe = $current_time + $current_time % 10;
 	
-	if(sizeof($rrdp_remote_proxies)>0 & sizeof($rrdp_msr_buffer)>0) {
-		foreach($rrdp_msr_buffer as $timeframe => $msr_commands) {
-			if($timeframe < $current_timeframe) {
-				
-				$buffer = '';
-				foreach($msr_commands as $id => $cmd) {
-					$buffer .= $id . "\t" . $cmd . "\r\n";
-				}
-				//$buffer = gzencode($buffer,1);
+	if(sizeof($rrdp_remote_proxies)>0) {
+		if(sizeof($rrdp_msr_buffer)>0) {
+			foreach($rrdp_msr_buffer as $timeframe => $msr_commands) {
+				if($timeframe < $current_timeframe) {
 
-				foreach($rrdp_remote_proxies as $ip => $fingerprint) {
-					$msr_sub_folder = './msr/'. $ip;
-					if(!is_dir($msr_sub_folder)) mkdir($msr_sub_folder);
-					$fp = fopen($msr_sub_folder . '/' . $timeframe, 'a');
-					fwrite($fp, $buffer);
+					$buffer = '';
+					foreach($msr_commands as $id => $cmd) {
+						$buffer .= $id . "\t" . $cmd . "\r\n";
+					}
+					//$buffer = gzencode($buffer,1);
+
+					foreach($rrdp_remote_proxies as $ip => $fingerprint) {
+						$msr_sub_folder = './msr/'. $ip;
+						if(!is_dir($msr_sub_folder)) mkdir($msr_sub_folder);
+						$fp = fopen($msr_sub_folder . '/' . $timeframe, 'a');
+						fwrite($fp, $buffer);
+					}
+					unset($rrdp_msr_buffer[$timeframe]);
 				}
-				unset($rrdp_msr_buffer[$timeframe]);
 			}
 		}
+	}else {
+		/* clear msr buffer */
+		$rrdp_msr_buffer = array();
 	}
 	return;
 }
@@ -1020,9 +1032,7 @@ function rrdp_cmd__shutdown( $socket, $args) {
 	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdp_replicator_pid, $rrdcached_pid, $microtime_start;
 	
 	if(!$args) {
-		$i = intval($socket);
-		/* only privileged users are allowed to shut down the proxy from remote */
-		if( $rrdp_admin_clients[$i]['privileged'] === true ) {
+		if( $socket === 'SIGTERM' || ( isset($rrdp_admin_clients[intval($socket)]) && $rrdp_admin_clients[intval($socket)]['privileged'] === true ) ) {
 		
 			$microtime_start = microtime(true);
 			
@@ -1283,7 +1293,7 @@ function rrdp_cmd__show_version($socket=false) {
 	
 	$memory_limit = rrdp_system__convert2bytes(ini_get('memory_limit'));
 	$memory_used = memory_get_usage();
-	$memory_usage = round(($memory_used/$memory_limit)*100, 2);
+	$memory_usage = round(($memory_used/$memory_limit)*100, 8);
 	
 	$output = PHP_EOL
 			. "#     ___           _   _     __    __    ___     ___                     " . PHP_EOL
@@ -1294,15 +1304,16 @@ function rrdp_cmd__show_version($socket=false) {
 			. "#                                                                   |___/ " . PHP_EOL
 			. PHP_EOL
 			." RRDtool Proxy v" . RRDP_VERSION . PHP_EOL
-			." Copyright (C) 2004-2016 The Cacti Group" . PHP_EOL
+			." Copyright (C) 2004-2017 The Cacti Group" . PHP_EOL
 			." {$rrdp_config['name']} uptime is $days days, $hours hours, $minutes minutes, $seconds seconds" . PHP_EOL
 			." Memory usage " . $memory_usage . " % (" . $memory_used . "/" . $memory_limit ." in bytes)" . PHP_EOL
 			." " . $rrdp_encryption['public_key_fingerprint'] . PHP_EOL
+			." Process ID: " .  posix_getpid() . PHP_EOL
 			." Session usage (" . sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")" . PHP_EOL . PHP_EOL
 			." Server IP [" . gethostbyname(php_uname('n')) . "]" . PHP_EOL
-			." Administration: [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_admin'] . ']' . PHP_EOL
-			." Replication:    [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_server'] . ']' . PHP_EOL
-			." Clients:        [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') .  ' :' . $rrdp_config['port_client'] . ']' . PHP_EOL
+			." Administration: [" . "localhost \t:" . $rrdp_config['port_admin'] . ']' . PHP_EOL
+			." Replication:    [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') . "\t:" . $rrdp_config['port_server'] . ']' . PHP_EOL
+			." Clients:        [" . ($rrdp_config['address'] != '0.0.0.0' ? $rrdp_config['address'] : 'any') . "\t:" . $rrdp_config['port_client'] . ']' . PHP_EOL
 			. PHP_EOL;
 	
 	if(is_resource($socket)) {
@@ -1733,5 +1744,20 @@ function display_help () {
 			. " -w --wizard    - Start Configuration Wizard\r\n"
 			. "\r\n";
 	fwrite(STDOUT, $output);
+}
+
+/*  signal handler  */
+function rrdp_sig_handler($signo) {
+ 	switch ($signo) {
+         case SIGTERM:
+             rrdp_cmd__shutdown('SIGTERM', false);
+             exit;
+             break;
+         case SIGHUP:
+             break;
+         case SIGUSR1:
+             break;
+         default:
+     }
 }
 ?>
