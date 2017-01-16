@@ -25,7 +25,6 @@ Get involved in development by participating in active development on
 Cacti should be able to run on any Unix-based operating system with
 the following requirements:
 
-- Linux only
 - PHP 5.4+, 7.1+ recommended
 - RRDTool 1.5+, 1.6+ recommended
 
