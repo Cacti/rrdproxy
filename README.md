@@ -33,7 +33,7 @@ PHP Must also be compiled as a standalone CLI binary including modules for SOCKE
 
 ## Usage
 At the first go you will automatically run through a setup routine (-w).
-
+```
  php rrdtool-proxy.php --help
 
  RRDtool Proxy v1.0
@@ -42,11 +42,11 @@ At the first go you will automatically run through a setup routine (-w).
  Optional:
  -v --version   - Display this help message
  -w --wizard    - Start Configuration Wizard
-
+```
 
 ## Command Line Interface
 Use '?' to get a list of all commands being supported by the proxy or hints about missing parameters.
-
+```
 telnet localhost 40303
 Trying 127.0.0.1...
 Connected to localhost.
@@ -81,7 +81,7 @@ rrdp#sh version
  Clients:        [192.168.10.10   :40301]
 
 rrdp#
-
+```
 
 ## Missing features
 
