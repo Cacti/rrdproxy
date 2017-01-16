@@ -22,7 +22,7 @@ Get involved in development by participating in active development on
 
 ## Requirements
 
-Cacti should be able to run on any Unix-based operating system with
+RRD proxy should be able to run on any Unix-based operating system with
 the following requirements:
 
 - PHP 5.4+, 7.1+ recommended
