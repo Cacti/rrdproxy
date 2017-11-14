@@ -28,7 +28,7 @@ the following requirements:
 - PHP 5.4+, 7.1+ recommended
 - RRDTool 1.5+, 1.6+ recommended
 
-PHP Must also be compiled as a standalone CLI binary including modules for SOCKETS, POSIX, PCNTL, GNU GMP, OPENSSL and ZLIB.
+PHP Must also be compiled as a standalone CLI binary including modules for SOCKETS, POSIX, PCNTL, GNU GMP and ZLIB.
 
 
 ## Usage
