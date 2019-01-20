@@ -197,7 +197,7 @@ if(!$rrdp_client) {
 }
 @socket_set_option($rrdp_client, SOL_SOCKET, SO_REUSEADDR, 1);
 if(!@socket_bind($rrdp_client, $rrdp_config['address'], $rrdp_config['port_client'])) {
-    rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_client'] ."'" . PHP_EOL . "Error: " . socket_strerror(socket_last_error()) . PHP_EOL );
+	rrd_system__system_die( PHP_EOL . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_client'] ."'" . PHP_EOL . "Error: " . socket_strerror(socket_last_error()) . PHP_EOL );
 };
 socket_set_nonblock($rrdp_client);
 
@@ -231,10 +231,10 @@ if($rrdp_config['path_rrdcached']) {
 	$rrdcached = proc_open($rrdcached_cmd,[1 => ['pipe','w'],2 => ['pipe','w']],$pipes);
 
 	$stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-    proc_close($rrdcached);
+	fclose($pipes[1]);
+	$stderr = stream_get_contents($pipes[2]);
+	fclose($pipes[2]);
+	proc_close($rrdcached);
 
 	/* Feedback from replicator required - let's wait for a sec */
 	usleep(1000000);
@@ -286,8 +286,8 @@ while($__server_listening) {
 	rrdp_msr__block_write();
 	rrdp_system__check();
 
-    /* setup clients listening to socket for reading */
-    $read = array();
+	/* setup clients listening to socket for reading */
+	$read = array();
 
 	/* do not listen to client connection requests as long as the system is not in state fully-synced */
 	if($rrdp_config['last_sync'] !== false) {
@@ -311,10 +311,10 @@ while($__server_listening) {
 	
 	/* all admin connections need to be monitored for changes, too */
 	foreach($rrdp_admin_clients as $rrdp_admin_client) {
-        $read[] = $rrdp_admin_client['socket'];
+		$read[] = $rrdp_admin_client['socket'];
 	}
 	
-    $ready = socket_select($read, $write, $except, $tv_sec);
+	$ready = socket_select($read, $write, $except, $tv_sec);
 	pcntl_signal_dispatch();
 	if($ready) {
 		foreach($read as $read_socket_index => $read_socket) {
@@ -917,17 +917,17 @@ function rrdp_system__status_live($variable) {
 
 function rrdp_system__convert2bytes($val) {
 
-    $val = trim($val);
-    $last = strtolower($val[strlen($val)-1]);
-    switch($last) {
-        case 'g':
-            $val *= 1024;
-        case 'm':
-            $val *= 1024;
-        case 'k':
-            $val *= 1024;
-    }
-    return $val;
+	$val = trim($val);
+	$last = strtolower($val[strlen($val)-1]);
+	switch($last) {
+		case 'g':
+			$val *= 1024;
+		case 'm':
+			$val *= 1024;
+		case 'k':
+			$val *= 1024;
+	}
+	return $val;
 }
 
 function rrdp_system__logging($msg) {
@@ -1613,31 +1613,31 @@ function rrdp_cmd__set_rsa($socket, $args) {
   */ 
 function handle_client($ssock, $csock, $ipc_sockets) 
 { 
-    GLOBAL $__server_listening, $rrdp_status, $rrdcached_pid;
+	GLOBAL $__server_listening, $rrdp_status, $rrdcached_pid;
 
 	list($ipc_socket_parent, $ipc_socket_child) = $ipc_sockets;
 	
 	#rrdp_system__logging('DEBUG: Client Handler started.');
-    
-    $pid = pcntl_fork(); 
 
-    if ($pid == -1) { 
-        
+	$pid = pcntl_fork();
+
+	if ($pid == -1) {
+
 		/* === fork failed === */ 
-        rrdp_system__logging('DEBUG: Client Handler - Fork failed.');
-        die; 										//TODO: handling missing
-        
+		rrdp_system__logging('DEBUG: Client Handler - Fork failed.');
+		die; 										//TODO: handling missing
+
 	
 	}elseif ($pid == 0) { 
 
-	    	/* === child === */   	
-	    	include('./lib/functions.php');
+			/* === child === */
+			include('./lib/functions.php');
 		include('./lib/client.php');
-	     
+
 		/* stop main loop, because we have to reuse the same code base */
 		$__server_listening = false;
 
-	    	/* free up unused resources */
+			/* free up unused resources */
 		socket_close($ssock);
 		socket_close($ipc_socket_child);
 				
@@ -1645,7 +1645,7 @@ function handle_client($ssock, $csock, $ipc_sockets)
 		$rrdp_status = array( 'bytes_received' => 0, 'bytes_sent' => 0, 'queries_rrdtool_total' => 0, 'queries_rrdtool_valid' => 0, 'queries_rrdtool_invalid' => 0, 'rrd_pipe_broken' => 0, 'status' => 'RUNNING');
 		
 		/* handle client parent and child communication */
-        	interact($csock, $ipc_socket_parent); 
+			interact($csock, $ipc_socket_parent);
 
 		/* close client connection */
 		@socket_shutdown($csock);
@@ -1660,7 +1660,7 @@ function handle_client($ssock, $csock, $ipc_sockets)
 		
 		/* kill the process itself */
 		exit(0);
-    
+
 	}else { 
 		/* === parent === */
 		
@@ -1678,23 +1678,23 @@ function handle_client($ssock, $csock, $ipc_sockets)
   */ 
 function handle_replicator($ipc_sockets) 
 { 
-    GLOBAL $__server_listening, $rrdp_status; 
+	GLOBAL $__server_listening, $rrdp_status;
 
 	list($ipc_socket_parent, $ipc_socket_child) = $ipc_sockets;
-    
-    $pid = pcntl_fork(); 
 
-    if ($pid == -1) { 
-        
+	$pid = pcntl_fork();
+
+	if ($pid == -1) {
+
 		/* === fork failed === */ 
-        die; 										//TODO: handling missing
+		die; 										//TODO: handling missing
 	
 	}elseif ($pid == 0) { 
 
 		/* === child === */ 
 		include('./lib/functions.php');
 		include('./lib/replicator.php');
-        
+
 		set_error_handler("__errrorHandler");
 		
 		/* stop main loop, because we have to reuse the same code base */
@@ -1710,7 +1710,7 @@ function handle_replicator($ipc_sockets)
 		$rrdp_status = array( 'bytes_received' => 0, 'bytes_sent' => 0, 'queries_rrdtool_total' => 0, 'queries_rrdtool_valid' => 0, 'queries_rrdtool_invalid' => 0, 'rrd_pipe_broken' => 0, 'status' => 'RUNNING');
 		
 		/* handle client parent and child communication */
-        interact(); 
+		interact();
 
 		/* send IPC update message to parent */
 		socket_write( $ipc_socket_parent, serialize($rrdp_status));
@@ -1721,7 +1721,7 @@ function handle_replicator($ipc_sockets)
 		
 		/* kill the process itself */
 		exit(0);
-    
+
 	}else { 
 		/* === parent === */
 		
@@ -1748,16 +1748,16 @@ function display_help () {
 
 /*  signal handler  */
 function rrdp_sig_handler($signo) {
- 	switch ($signo) {
-         case SIGTERM:
-             rrdp_cmd__shutdown('SIGTERM', false);
-             exit;
-             break;
-         case SIGHUP:
-             break;
-         case SIGUSR1:
-             break;
-         default:
-     }
+	switch ($signo) {
+		 case SIGTERM:
+			 rrdp_cmd__shutdown('SIGTERM', false);
+			 exit;
+			 break;
+		 case SIGHUP:
+			 break;
+		 case SIGUSR1:
+			 break;
+		 default:
+	 }
 }
 ?>

@@ -24,7 +24,7 @@
 
 function interact($socket_client, $ipc_socket_parent) {
 
-    /* 
+	/*
 		Clients using the default port are only allowed to talk to RRDtool directly.
 		But the child will keep the parent up-to-date by using IPC.
 	*/ 
@@ -49,12 +49,12 @@ function interact($socket_client, $ipc_socket_parent) {
 	
 	while(1) {
 	
-	    /* setup clients listening to socket for reading */
+		/* setup clients listening to socket for reading */
 		$read = array();
 		$read[0] = $socket_client;
 		$read[1] = $ipc_socket_parent;
 	
-	    $ready = socket_select($read, $write, $except, $tv_sec);
+		$ready = socket_select($read, $write, $except, $tv_sec);
 		if($ready) {
 			foreach($read as $read_socket_index => $read_socket) {
 			

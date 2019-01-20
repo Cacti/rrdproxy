@@ -83,7 +83,7 @@ function interact() {
 		$except= array();
 		$tv_sec = 1;
 
-	    /* setup clients listening to socket for reading */
+		/* setup clients listening to socket for reading */
 		$read = array();
 		$read[0] = $rrdp_server;
 		$read[1] = $ipc_socket_parent;
@@ -689,30 +689,30 @@ function __debug($msg, $level='debug_notice', $category='REPLICATOR') {
 function __errrorHandler($code, $text, $file, $line) {
 	global $ipc_socket_parent, $debug_mode;
 	
-    if (!(error_reporting() & $code)) {
-        return;
-    }
+	if (!(error_reporting() & $code)) {
+		return;
+	}
 
-    switch ($code) {
-    case E_USER_ERROR:
+	switch ($code) {
+	case E_USER_ERROR:
 		__debug("ERROR [$code] $text, file: $file ,line: $line", 'debug_error');
-        exit(1);
-        break;
+		exit(1);
+		break;
 
-    case E_USER_WARNING:
-        __debug("WARNING [$code] $text", 'debug_warning');
-        break;
+	case E_USER_WARNING:
+		__debug("WARNING [$code] $text", 'debug_warning');
+		break;
 
-    case E_USER_NOTICE:
+	case E_USER_NOTICE:
 		__debug("NOTICE [$code] $text");
-        break;
+		break;
 
-    default:
-        __debug("UNKN ERROR TYPE [$code] $text, file: $file ,line: $line", 'debug_error');
-        break;
-    }
+	default:
+		__debug("UNKN ERROR TYPE [$code] $text, file: $file ,line: $line", 'debug_error');
+		break;
+	}
 
-    return true;
+	return true;
 }
 
 ?>

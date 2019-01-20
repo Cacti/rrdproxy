@@ -197,7 +197,7 @@
 		wizard_handle_output("\033[1;33;44m   RRDtool Proxy Server Wizard                                              4/7 \033[0m", false, true, true);
 
 		$msg = 'This section allows to modify different system and connection parameters of RRDproxy. If your have any doubts whether you should modify a value or not '
-		     . 'you can go on with the default value shown in square brackets by just pressing ENTER. ';
+			 . 'you can go on with the default value shown in square brackets by just pressing ENTER. ';
 		wizard_handle_output( wordwrap($msg, 75), true, true);
 	
 		if($system__config_tmp) {

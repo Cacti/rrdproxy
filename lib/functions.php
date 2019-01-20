@@ -24,12 +24,12 @@
 
 function rrdtool_pipe_init($rrdp_config) {
 
-    $fds = array(
+	$fds = array(
 		0 => array('pipe', 'r'),				// stdin
-        1 => array('pipe', 'w'),				// stdout
-        2 => array('file', '/dev/null', 'a')	// stderr
-    );
-    $process = @proc_open($rrdp_config['path_rrdtool'] . " - " . $rrdp_config['path_rra'], $fds, $pipes);
+		1 => array('pipe', 'w'),				// stdout
+		2 => array('file', '/dev/null', 'a')	// stderr
+	);
+	$process = @proc_open($rrdp_config['path_rrdtool'] . " - " . $rrdp_config['path_rra'], $fds, $pipes);
 
 	if($process === false){
 		return false;
@@ -42,12 +42,12 @@ function rrdtool_pipe_init($rrdp_config) {
 }
 
 function rrdtool_pipe_close($process) {
-    proc_close($process);
+	proc_close($process);
 }
 
 function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $compression, $silent_mode = false) {
-    $stdout = '';
-    $return_code = fwrite($pipes[0], $command);
+	$stdout = '';
+	$return_code = fwrite($pipes[0], $command);
 
 	if($return_code === false) {
 		/* pipe broken */
