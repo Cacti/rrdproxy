@@ -6,7 +6,7 @@ support of Cacti Boost as well as the RRDcached daemon.
 RRDtool proxy allows to split Cacti into more different components (for really big installations) without
 the need for NFS. And it will be natively supported by the upcoming major release 1.0 of Cacti.
 
-Due the fact that we are talking about critical file transactions RRDtool proxy only supports 
+Due the fact that we are talking about critical file transactions RRDtool proxy only supports
 high encrypted connections (RSA2048 + AES192) with continuously changing keys between
 the proxy and registered clients / proxies.
 
@@ -36,7 +36,7 @@ At the first go you will automatically run through a setup routine (-w).
 ```
  php rrdtool-proxy.php --help
 
- RRDtool Proxy v1.0
+ RRDtool Proxy v1.2.3
  Copyright (C) 2004-2017 The Cacti Group
  usage: rrdtool-proxy.php [--wizard] [-w] [--version] [-v]
  Optional:
@@ -67,8 +67,8 @@ rrdp#sh version
 #  \____/\__,_|\___|\__|_| \/ \_/\/ \_/___,'   \/    |_|  \___/_/\_\__, |
 #                                                                   |___/
 
- RRDtool Proxy v1.0
- Copyright (C) 2004-2017 The Cacti Group
+ RRDtool Proxy v1.2.3
+ Copyright (C) 2004-2019 The Cacti Group
  rrdp uptime is 14 days, 0 hours, 4 minutes, 14 seconds
  Memory usage 0.18872917 % (2026464/1073741824 in bytes)
  a8:29:6a:b7:5d:be:c3:8a:be:13:7a:61:ee:0c:8b:d3
@@ -87,3 +87,5 @@ rrdp#
 
 - Data replication has been completed to 95%, but is still not ready
 - NET-SNMP pass persistent daemon and MIB needs to written to make proxy stats available through SNMP
+
+
