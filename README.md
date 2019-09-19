@@ -3,12 +3,11 @@
 Cacti RRD Proxy is a standalone proxy interface to Tobi Oetiker's great RRDTool.
 Main focus of this project is to allow a relocation of RRD files including data replication,
 support of Cacti Boost as well as the RRDcached daemon.
-RRDtool proxy allows to split Cacti into more different components (for really big installations) without
-the need for NFS. And it will be natively supported by the upcoming major release 1.0 of Cacti.
+RRDtool proxy allows to split Cacti into more different components without the need for NFS.
 
-Due the fact that we are talking about critical file transactions RRDtool proxy only supports
+Due the fact that file transactions are having a high criticality RRDtool proxy only supports
 high encrypted connections (RSA2048 + AES192) with continuously changing keys between
-the proxy and registered clients / proxies.
+the proxy and registered clients / other proxies.
 
 Over a local service port administrators are able to access a separate command line interface
 that allows to configure and debug the proxy.
@@ -25,19 +24,20 @@ Get involved in development by participating in active development on
 RRD proxy should be able to run on any Unix-based operating system with
 the following requirements:
 
-- PHP 5.4+, 7.1+ recommended
-- RRDTool 1.5+, 1.6+ recommended
+- PHP 7.1+, 7.3+ recommended, including modules for
+    SOCKETS, POSIX, PCNTL, GNU GMP and ZLIB    
+- RRDTool 1.5+, 1.7+ recommended
 
-PHP Must also be compiled as a standalone CLI binary including modules for SOCKETS, POSIX, PCNTL, GNU GMP and ZLIB.
-
+Running as data backend for Cacti requires:
+- Cacti 1.2.7
 
 ## Usage
 At the first go you will automatically run through a setup routine (-w).
 ```
  php rrdtool-proxy.php --help
 
- RRDtool Proxy v1.2.3
- Copyright (C) 2004-2017 The Cacti Group
+ RRDtool Proxy v1.2.7
+ Copyright (C) 2004-2019 The Cacti Group
  usage: rrdtool-proxy.php [--wizard] [-w] [--version] [-v]
  Optional:
  -v --version   - Display this help message
@@ -67,7 +67,7 @@ rrdp#sh version
 #  \____/\__,_|\___|\__|_| \/ \_/\/ \_/___,'   \/    |_|  \___/_/\_\__, |
 #                                                                   |___/
 
- RRDtool Proxy v1.2.3
+ RRDtool Proxy v1.2.7
  Copyright (C) 2004-2019 The Cacti Group
  rrdp uptime is 14 days, 0 hours, 4 minutes, 14 seconds
  Memory usage 0.18872917 % (2026464/1073741824 in bytes)

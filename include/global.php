@@ -22,7 +22,7 @@
  +-------------------------------------------------------------------------+
 */
 
-define('RRDP_VERSION', '1.2.3');
+define('RRDP_VERSION', '1.2.7');
 define('COPYRIGHT_YEARS', 'Copyright (C) 2004-' . date('Y') . ' The Cacti Group');
 define('COPYRIGHT_YEARS_SHORT', '(c) 2004-' . date('Y') . ' - The Cacti Group');
 
