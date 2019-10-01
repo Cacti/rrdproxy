@@ -129,7 +129,7 @@ function wizard() {
 
 	$system__config = file_exists('./include/config');
 	if($system__config) {
-		include_once('./include/config');
+		include('./include/config');
 		$system__config = (isset($rrdp_config) && is_array($rrdp_config));
 	}
 	rrd_system__system_boolean_message( 'read: RRDtool Proxy Server configuration file', $system__config, false );
@@ -137,7 +137,7 @@ function wizard() {
 
 	$system__config_tmp = file_exists('./include/config.tmp');
 	if($system__config_tmp) {
-		include_once('./include/config.tmp');
+		include('./include/config.tmp');
 		$system__config_tmp = (isset($rrdp_config_tmp) && is_array($rrdp_config_tmp));
 	}
 	rrd_system__system_boolean_message( 'read: RRDtool Proxy Server temporary configuration file', $system__config_tmp, false );
