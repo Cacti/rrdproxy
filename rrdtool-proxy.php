@@ -83,14 +83,15 @@ if ( !file_exists('./include/config') || $wizard === true ) {
 	define('SYSTEM_LOGGING', TRUE);
 	rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Initiate system startup', 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
 	fwrite(STDOUT, "\e[8;50;80t");
-	fwrite(STDOUT, chr(27) . "[2J" . chr(27) . "[3J" . chr(27) . "[;H" . "\033[1;33;44m   RRDtool Proxy Server Startup                                                 \033[0m" . "\r\n");
+	fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG);
+	fwrite(STDOUT, "   RRDtool Proxy Server Startup                                                 " . ANSI_RESET . "\r\n");
 
 	/* No Windows, please ;) */
 	$support_os = strstr(PHP_OS, "WIN") ? false : true;
 	rrd_system__system_boolean_message('test: operation system supported', $support_os, true);
 
 	/* RRDtool Proxy has already been started ? */
-	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdtool-proxy.php', $output);
+	exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
 	$not_running = (sizeof($output) >= 2 ) ? false : true;
 	rrd_system__system_boolean_message('test: no proxy instance running', $not_running, true, $force);
 
@@ -392,7 +393,7 @@ while ($__server_listening) {
 							$rrdp_admin_sockets[$key] = $socket_descriptor;
 							$rrdp_admin_clients[$key] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'logging_severity_console' => $rrdp_config['logging_severity_terminal'], 'logging_category_console' => $rrdp_config['logging_category_terminal'], 'debug' => false, 'type' => 'srv');
 
-							socket_write($socket_descriptor, "\033[0;32m" . $rrdp_config['name'] . ">\033[0m ");
+							socket_write($socket_descriptor, ANSI_RESET . ANSI_GREEN_FG . $rrdp_config['name'] . ">" . ANSI_RESET . " ");
 
 							rrdp_system__update('max_admin_connections');
 							rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' Service connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_DEBUG);
@@ -862,7 +863,7 @@ function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false,
 	if (strlen($msg) > $max_msg_length)
 		$msg = substr($msg, 0, $max_msg_length - 3) . '...';
 
-	fwrite(STDOUT, sprintf("\r\n[%.5f] %-{$max_msg_length}s \033[0;{$color}m%s\033[0m", ($microtime_end - $microtime_start), $msg, $status));
+	fwrite(STDOUT, sprintf("\r\n[%.5f] %-{$max_msg_length}s " . ANSI_RESET . "{$color}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg, $status));
 
 	if ($skip == false && $boolean_state == false && $exit == true ) {
 		rrdp_system__logging(LOGGING_LOCATION_BUFFERED, $msg, 'SYS', SEVERITY_LEVEL_CRITICAL);
@@ -876,7 +877,7 @@ function rrd_system__system_message($microtime_start, $msg, $level = 'normal', $
 	global $colors;
 
 	$microtime_end = microtime(true);
-	fwrite(STDOUT, sprintf("\r\n[%.5f] \033[0;{$colors[$level]}m%s\033[0m", ($microtime_end - $microtime_start), $msg));
+	fwrite(STDOUT, sprintf("\r\n[%.5f] " . ANSI_RESET . "{$colors[$level]}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg));
 	if ($exit)
 		die("\r\n");
 }
@@ -895,7 +896,7 @@ function rrd_system__progressbar( $current, $max ) {
 	$seconds = floor($estimated - $hours * 3600 - $minutes * 60);
 
 	fwrite(STDOUT, "\0338");
-	fwrite(STDOUT, str_pad( "[\033[0;32m" . str_repeat( "#", $progress_points ), 48, " ", STR_PAD_RIGHT) . "\033[0m] " . sprintf( "%6.2f", $progress ) . str_pad( "% ( ". sprintf( "%02dh %02dm %02ds", $hours, $minutes, $seconds ) . " left )", 20, " ", STR_PAD_RIGHT) );
+	fwrite(STDOUT, str_pad( "[" . ANSI_RESET . ANSI_GREEN_FG . str_repeat( "#", $progress_points ), 48, " ", STR_PAD_RIGHT) . ANSI_RESET . "] " . sprintf( "%6.2f", $progress ) . str_pad( "% ( ". sprintf( "%02dh %02dm %02ds", $hours, $minutes, $seconds ) . " left )", 20, " ", STR_PAD_RIGHT) );
 	if ($current == $max) {
 		unset($process_start);
 		print "\r\n";
@@ -952,7 +953,7 @@ function rrdp_system__debug($msg, $category, $severity, $environment = 'proxy') 
 		foreach ($rrdp_admin_clients as $key => $rrdp_admin_client) {
 			if (isset($rrdp_admin_client['debug'][$environment]) && $rrdp_admin_client['debug'][$environment] === true) {
 				/* write debug message to socket and return default prompt for proviledge mode */
-				rrdp_system__socket_write($rrdp_admin_sockets[$key], "\r\n\033[0;{$colors[$severity_levels[$severity]]}m[" . $category . "] " . $msg);
+				rrdp_system__socket_write($rrdp_admin_sockets[$key], "\r\n" . ANSI_RESET . "{$colors[$severity_levels[$severity]]}[" . $category . "] " . $msg);
 			}
 		}
 	}
@@ -963,7 +964,7 @@ function rrdp_system__return_prompt($socket) {
 
 	$i = intval($socket);
 
-	$prompt = "\033[0;" . (($rrdp_admin_clients[$i]['debug']) ? $colors['debug'] : $colors['prompt']) . "m" . $rrdp_config['name'] . (($rrdp_admin_clients[$i]['privileged']) ? '#' : '>') . "\033[0m ";
+	$prompt = ANSI_RESET . (($rrdp_admin_clients[$i]['debug']) ? $colors['debug'] : $colors['prompt']) . $rrdp_config['name'] . (($rrdp_admin_clients[$i]['privileged']) ? '#' : '>') . ANSI_RESET . " ";
 	rrdp_system__socket_write($socket, $prompt);
 }
 
@@ -1046,13 +1047,21 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 
 		if ($severity < SEVERITY_LEVEL_DEBUG) {
 			if ($location === LOGGING_LOCATION_BUFFERED && $rrdp_config['logging_severity_buffered'] && $severity <= $rrdp_config['logging_severity_buffered']) {
-				if (count($rrdp_buffers['logging_buffered']) == $rrdp_config['logging_size_buffered'] ) {
+				if (!isset($rrdp_buffers['logging_buffered'])) {
+					$rrdp_buffers['logging_buffered'] = array();
+				}
+
+				if (count($rrdp_buffers['logging_buffered']) == $rrdp_config['logging_size_buffered']) {
 					$drop = array_shift($rrdp_buffers['logging_buffered']);
 					unset($drop);
 				}
 				$rrdp_buffers['logging_buffered'][] = '['.date(DATE_RFC822).'] [' . $severity_levels[$severity] . '] [' . $category . '] ' . trim($msg);
 			}else if ($location === LOGGING_LOCATION_SNMP && $rrdp_config[logging_severity_snmp] && $severity <= $rrdp_config[logging_severity_snmp]) {
-				if (count($rrdp_buffers['logging_snmp']) == $rrdp_config['logging_size_snmp'] ) {
+				if (!isset($rrdp_buffers['logging_snmp'])) {
+					$rrdp_buffers['logging_snmp'] = array();
+				}
+
+				if (count($rrdp_buffers['logging_snmp']) == $rrdp_config['logging_size_snmp']) {
 					$drop = array_shift($rrdp_buffers['logging_snmp']);
 					unset($drop);
 				}
@@ -1065,7 +1074,7 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 				#if ( $rrdp_admin_clients[$key]['logging_severity_console'] && $severity <= $rrdp_admin_clients[$key]['logging_severity_console'] ) {
 				#	if($rrdp_admin_clients[$key]['logging_category_console'] == 'all' || stripos($rrdp_admin_clients[$key]['logging_category_console'], $category) !== false) {
 				/* write debug message to socket and return default prompt for proviledge mode */
-				rrdp_system__socket_write($rrdp_admin_sockets[$key], "\r\n\033[0;{$colors[$severity_levels[$severity]]}m[" . $category . "] " . $msg);
+				rrdp_system__socket_write($rrdp_admin_sockets[$key], "\r\n" . ANSI_RESET . "{$colors[$severity_levels[$severity]]}[" . $category . "] " . $msg);
 				#	}
 				#}
 			}
@@ -1238,23 +1247,37 @@ function rrdp_cmd__clear_logging($socket, $args) {
 
 function rrdp_cmd__reset($socket, $args) {
 	/* client would like to regularly clear and reset terminal screen */
-	rrdp_system__socket_write($socket, chr(27) . "[2J" . chr(27) . "[3J" . chr(27) . "[;H");
+	rrdp_system__socket_write($socket, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT);
 	return;
 }
 
 function rrdp_cmd__enable($socket, $args) {
-	global $rrdp_admin_clients;
-	if (!$args) {
+	global $rrdp_admin_clients, $rrdp_config;
+	$arg = array_shift($args);
+
+	// If we have a password, assume we are already invalid
+	$invalid = isset($rrdp_config['enable_password']);
+	if ($invalid && !is_null($arg) ) {
+		// If we are invalid and have an argument passed then we
+		// are still invalid if the passwords do not match
+		$invalid = (trim($arg) != trim($rrdp_config['enable_password']));
+	}
+
+	if (!$invalid) {
 		$i = intval($socket);
 		/* only a local connected user is allowed to switch to enhanced mode */
 		if (in_array($rrdp_admin_clients[$i]['ip'], array('127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1'))) {
 			$rrdp_admin_clients[$i]['privileged'] = true;
 			rrdp_system__global_console_logging_update();
 			return;
+		} else {
+			rrdp_system__socket_write($socket, "% Privileged mode is restricted to localhost only\r\n");
 		}
+	} else {
+		rrdp_system__socket_write($socket, "% Invalid privileged mode password passed\r\n");
 	}
+
 	/* permission denied */
-	rrdp_system__socket_write($socket, "% Privileged mode is restricted to localhost only\r\n");
 	return;
 }
 
@@ -1304,7 +1327,7 @@ function rrdp_cmd__shutdown($socket, $args) {
 
 			$microtime_start = microtime(true);
 
-			fwrite(STDOUT, "\033[2J\033[;H\033[1;33;44m   RRDtool Proxy Server Shutdown                                                 \033[0m" . "\r\n");
+			fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Shutdown                                                 " . ANSI_RESET . "\r\n");
 
 			/* stop accepting client updates */
 			socket_close($rrdp_client);
@@ -1365,7 +1388,7 @@ function rrdp_cmd__shutdown($socket, $args) {
 
 			}
 
-			fwrite(STDOUT, "\r\n" . "\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
+			fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
 			exit ;
 		}
 	}
@@ -1570,14 +1593,8 @@ function rrdp_cmd__show_version() {
 	$memory_used = memory_get_usage();
 	$memory_usage = round(($memory_used / $memory_limit) * 100, 8);
 
-	$output = "\r\n" . "#     ___           _   _     __    __    ___     ___                     "
-		. "\r\n" . "#    / __\__ _  ___| |_(_)   /__\  /__\  /   \   / _ \_ __ _____  ___   _ "
-		. "\r\n" . "#   / /  / _` |/ __| __| |  / \// / \// / /\ /  / /_)/ '__/ _ \ \/ / | | |"
-		. "\r\n" . "#  / /__| (_| | (__| |_| | / _  \/ _  \/ /_//  / ___/| | | (_) >  <| |_| |"
-		. "\r\n" . "#  \____/\__,_|\___|\__|_| \/ \_/\/ \_/___,'   \/    |_|  \___/_/\_\\__, |"
-		. "\r\n" . "#                                                                   |___/ "
-		. "\r\n"
-		. "\r\n" . " RRDtool Proxy v" . RRDP_VERSION
+	$output = rrdp_get_cacti_proxy_logo()
+		. "\r\n" . " RRDtool Proxy Server v" . RRDP_VERSION
 		. "\r\n" . " " . COPYRIGHT_YEARS
 		. "\r\n" . " {$rrdp_config['name']} uptime is $days days, $hours hours, $minutes minutes, $seconds seconds"
 		. "\r\n" . " Memory usage " . $memory_usage . " % (" . $memory_used . " of " . $memory_limit . " bytes)"
@@ -2068,7 +2085,7 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 
 /*	display_help - displays the usage of the RRDproxy */
 function display_help() {
-	$output = "\r\n" . " RRDtool Proxy v" . RRDP_VERSION
+	$output = "\r\n" . " RRDtool Proxy Server v" . RRDP_VERSION
 		. "\r\n" . " " . COPYRIGHT_YEARS
 		. "\r\n" . " usage: rrdtool-proxy.php [--wizard] [-w] [--version] [-v] [--force] [-f]"
 		. "\r\n" . " Optional:"
@@ -2100,4 +2117,12 @@ function rrdp_sig_handler($signo) {
 		default :
 	}
 }
-?>
+
+function rrdp_get_cacti_proxy_logo() {
+	return	           "# " . ANSI_BOLD . ANSI_GREEN_FG . "    ___           _   _  " . ANSI_RESET . "   __    __    ___     ___                     "
+		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "   / __\__ _  ___| |_(_) " . ANSI_RESET . "  /__\  /__\  /   \   / _ \_ __ _____  ___   _ "
+		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "  / /  / _` |/ __| __| | " . ANSI_RESET . " / \// / \// / /\ /  / /_)/ '__/ _ \ \/ / | | |"
+		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . " / /__| (_| | (__| |_| | " . ANSI_RESET . "/ _  \/ _  \/ /_//  / ___/| | | (_) >  <| |_| |"
+		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . " \____/\__,_|\___|\__|_| " . ANSI_RESET . "\/ \_/\/ \_/___,'   \/    |_|  \___/_/\_\\___, |"
+		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "                         " . ANSI_RESET . "                                         |___/ ";
+}

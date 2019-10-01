@@ -1,39 +1,67 @@
 # rrdproxy
 
 Cacti RRD Proxy is a standalone proxy interface to Tobi Oetiker's great RRDTool.
-Main focus of this project is to allow a relocation of RRD files including data replication,
-support of Cacti Boost as well as the RRDcached daemon.
-RRDtool proxy allows to split Cacti into more different components without the need for NFS.
 
-Due the fact that file transactions are having a high criticality RRDtool proxy only supports
-high encrypted connections (RSA2048 + AES192) with continuously changing keys between
-the proxy and registered clients / other proxies.
+The main focus of this project is to allow the relocation of RRD files, data
+replication, support of Cacti Boost and, if needed, the RRDcached daemon. It
+allows system administrators to split Cacti's access resources across machines
+without the need for NFS.
 
-Over a local service port administrators are able to access a separate command line interface
-that allows to configure and debug the proxy.
+Due the fact that updates to files may contain sensitive data and to prevent
+undesired updates, RRDtool proxy utilitizes high encrypted connections (RSA2048
+and AES192) with continuously changing keys.  This ensures a secured connection
+between the proxy and registered clients and/or other proxies.
 
+A local service port is provided to allow administrators are able to access a
+separate command line interface which provides easy access to configure and
+debug the proxy.
 
 ## Contribute
 
 Get involved in development by participating in active development on
 [GitHub](https://github.com/Cacti/rrdproxy/).
 
-
 ## Requirements
 
-RRD proxy should be able to run on any Unix-based operating system with
-the following requirements:
+RRDproxy runs on any Unix-based operating system that can meet the minimum
+requirements, though it will perform better with the recommended (or higher).
 
-- PHP 7.1+, 7.3+ recommended, including modules for
-    SOCKETS, POSIX, PCNTL, GNU GMP and ZLIB    
-- RRDTool 1.5+, 1.7+ recommended
+### Minimum Requirements
 
-Running as data backend for Cacti requires:
+- PHP Version 7.1 or higher
+  Installation must include and enable the following modules:
+
+  - Sockets
+
+  - Posix
+
+  - PCntl
+
+  - GMP
+
+  - ZLIB
+
+- RRDtool Version 1.5 or higher
+
+- Cacti Version 1.2.7 or higher
+
+### Recommended Requirements
+
+All minimum requirements must be met, though the following are more optinal:
+
+- PHP Version 7.3 or higher
+  Include all minimum recommendation modules
+
+- RRDtool 1.7 or higher
+
 - Cacti 1.2.7
 
 ## Usage
-At the first go you will automatically run through a setup routine (-w).
-```
+
+Before using the RRDproxy, you must install the system using the setup wizard
+which can be run at any point using the -w parameter.
+
+```shell
  php rrdtool-proxy.php --help
 
  RRDtool Proxy v1.2.7
@@ -44,8 +72,53 @@ At the first go you will automatically run through a setup routine (-w).
  -w --wizard    - Start Configuration Wizard
 ```
 
+When running through the wizard, the status of items will appear on the right
+hand side of the screen.  When an item is successfully completed, the status of
+`[OK]` will be shown in green (when color is supported) as seen below:
+
+```shell
+Checking System Requirements...
+[0.00001] test: operation system supported                                  [OK]
+[0.00007] test: php module 'sockets'                                        [OK]
+[0.00011] test: php module 'posix'                                          [OK]
+```
+
+Should any item have an issue, the status will be displayed as something other
+than `[OK]` such as `[FAILED]`:
+
+```shell
+[0.40270] read: RRDproxy configuration file                             [FAILED]
+```
+
+Status Color | Description
+: --- | : ---
+Green | Success and without issue
+Yellow | Warnings and will be ignored, correct the problem if needed
+Red | Errors and will not be ignored, may prevent continuation
+
+When the wziard prompts for the various settings that are available, you can
+accept the default value simply by pressing return to accept it. Below are a few
+of these settings and the default values that can be accepted:
+
+Setting | Default | Comment
+: --- | : --- | : ---
+CLI System Prompt | rrdp | Max 8 chars
+IPv4 Listen Addr | 0.0.0.0 | Listen all addr
+Client Proxy Port | 40301 | Connections from a client
+Proxy Proxy port | 40302 | Connections from another proxy
+Dedicated CLI port | 40303 | Connections to the RRDproxy cli
+
+If the wizard displays a prompt that requires a response and it has no default,
+you will be prompted again until a valid response has been entered.
+
 ## Command Line Interface
-Use '?' to get a list of all commands being supported by the proxy or hints about missing parameters.
+
+Use '?' or 'help' to get a list of all commands being supported by the proxy or
+hints about missing parameters.  The following shows an enable of using the CLI
+to list the available commands to find the version of RRDproxy.  
+
+Note: that most commands require that the CLI is in privileged mode.
+
 ```
 telnet localhost 40303
 Trying 127.0.0.1...
@@ -57,7 +130,29 @@ rrdp>?
   show            Show running system information
   quit            Close terminal session
 
-rrdp>ena
+rrdp>ena Tester12
+
+rrdp# help
+  clear           Clear functions for internal buffers
+  disable         Turn off privileged commands
+  reset           Reset terminal screen
+  set             Configure proxy settings
+  show            Show running system information
+  shutdown        Close all connections and shut down proxy
+  quit            Close terminal session
+
+rrdp# show ?
+  clients         List all trusted client connections
+  counters        Return all system counters
+  cluster         List all trusted cluster peers
+  logging         Display state of logging
+  msr             Display replication state
+  processes       Display running child processes
+  rsa             Show Encryption setup
+  threads         Display currently open connections
+  variables       Show Current Operating configuration
+  version         System software status
+
 rrdp#sh version
 
 #     ___           _   _     __    __    ___     ___
@@ -83,9 +178,27 @@ rrdp#sh version
 rrdp#
 ```
 
-## Missing features
+## Planned features
 
-- Data replication has been completed to 95%, but is still not ready
-- NET-SNMP pass persistent daemon and MIB needs to written to make proxy stats available through SNMP
+- Data replication
 
+  This is currently being written and has been mostly completed, but it is still
+  being tested and so hasn't been made available yet.
+
+- Proxy stats via SNMP
+
+  A NET-SNMP persistent daemon and MIB needs to written to enabled support of
+  proxy stats via SNMP.  This could lead to an interesting loop of Cacti storing
+  stats for RRDproxy within RRDproxy.
+
+- International language support
+
+  Currently, the RRDproxy wizard and command line interface port are both
+  offering only english as the default langauge.
+
+- Encrypted password storage
+
+  Ensure that the enable password is encrypted at the system level to provide a
+  higher level of security.  This could also potentially allow remote access to
+  the system CLI.
 

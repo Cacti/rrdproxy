@@ -50,6 +50,58 @@ define('CONNECTED', 4);
 define('BROKEN', 5);
 define('NOT_REACHABLE', 6);
 
+define('ANSI_ESCAPE', "\033[");
+define('ANSI_RESET',          ANSI_ESCAPE . '0m');
+define('ANSI_BOLD',           ANSI_ESCAPE . '1m');
+define('ANSI_FAINT',          ANSI_ESCAPE . '2m');
+define('ANSI_ITALIC',         ANSI_ESCAPE . '3m');
+define('ANSI_UNDERLINE',      ANSI_ESCAPE . '4m');
+define('ANSI_BLINK',          ANSI_ESCAPE . '5m');
+define('ANSI_BLINK_FAST',     ANSI_ESCAPE . '6m');
+define('ANSI_CONCEAL',        ANSI_ESCAPE . '7m');
+define('ANSI_STRIKEOUT',      ANSI_ESCAPE . '8m');
+define('ANSI_FONT_DEFAULT',   ANSI_ESCAPE . '9m');
+define('ANSI_FONT_ALT1',      ANSI_ESCAPE . '10m');
+define('ANSI_FONT_ALT2',      ANSI_ESCAPE . '11m');
+define('ANSI_FONT_ALT3',      ANSI_ESCAPE . '12m');
+define('ANSI_FONT_ALT4',      ANSI_ESCAPE . '13m');
+define('ANSI_FONT_ALT5',      ANSI_ESCAPE . '14m');
+define('ANSI_FONT_ALT6',      ANSI_ESCAPE . '15m');
+define('ANSI_FONT_ALT7',      ANSI_ESCAPE . '16m');
+define('ANSI_FONT_ALT8',      ANSI_ESCAPE . '17m');
+define('ANSI_FONT_ALT9',      ANSI_ESCAPE . '18m');
+define('ANSI_FONT_ALT10',     ANSI_ESCAPE . '19m');
+define('ANSI_FONT_FRAKTUR',   ANSI_ESCAPE . '20m');
+define('ANSI_UNDERLINE_DBL',  ANSI_ESCAPE . '21m');
+define('ANSI_NORMAL',         ANSI_ESCAPE . '22m');
+define('ANSI_NO_ITL_FRAK',    ANSI_ESCAPE . '23m');
+define('ANSI_UNDERLINE_OFF',  ANSI_ESCAPE . '24m');
+define('ANSI_BLINK_OFF',      ANSI_ESCAPE . '25m');
+define('ANSI_INVERSE_OFF',    ANSI_ESCAPE . '27m');
+define('ANSI_REVEAL',         ANSI_ESCAPE . '28m');
+define('ANSI_STRIKEOUT_OFF',  ANSI_ESCAPE . '29m');
+define('ANSI_BLACK_FG',       ANSI_ESCAPE . '30m');
+define('ANSI_BLACK_BG',       ANSI_ESCAPE . '40m');
+define('ANSI_RED_FG',         ANSI_ESCAPE . '31m');
+define('ANSI_RED_BG',         ANSI_ESCAPE . '41m');
+define('ANSI_GREEN_FG',       ANSI_ESCAPE . '32m');
+define('ANSI_GREEN_BG',       ANSI_ESCAPE . '42m');
+define('ANSI_YELLOW_FG',      ANSI_ESCAPE . '33m');
+define('ANSI_YELLOW_BG',      ANSI_ESCAPE . '43m');
+define('ANSI_BLUE_FG',        ANSI_ESCAPE . '34m');
+define('ANSI_BLUE_BG',        ANSI_ESCAPE . '44m');
+define('ANSI_MAGENTA_FG',     ANSI_ESCAPE . '35m');
+define('ANSI_MAGENTA_BG',     ANSI_ESCAPE . '45m');
+define('ANSI_CYAN_FG',        ANSI_ESCAPE . '36m');
+define('ANSI_CYAN_BG',        ANSI_ESCAPE . '46m');
+define('ANSI_WHITE_FG',       ANSI_ESCAPE . '37m');
+define('ANSI_WHITE_BG',       ANSI_ESCAPE . '47m');
+define('ANSI_ERASE_TO_END',   ANSI_ESCAPE . '0J');
+define('ANSI_ERASE_TO_BEGIN', ANSI_ESCAPE . '1J');
+define('ANSI_ERASE_SCREEN',   ANSI_ESCAPE . '2J');
+define('ANSI_ERASE_BUFFER',   ANSI_ESCAPE . '3J');
+define('ANSI_POS_TOP_LEFT',   ANSI_ESCAPE . ';H');
+
 $severity_levels = array(
     0 => 'none',
     1 => 'emergency',
@@ -83,16 +135,16 @@ $process_status = array(
 );
 
 $colors = array(
-    'prompt' 		=> 32,		#green
-    'debug' 		=> 36,		#cyan
-    'normal' 		=> 32,		#green
-    'informational'	=> 34,		#blue
-    'notification' 	=> 37,		#white
-    'warning' 		=> 33,		#yellow
-    'error' 		=> 31,		#red
-    'critical' 		=> 35,		#magenta
-    'alert'			=> 45,		#magenta background
-    'emergency' 	=> 41,		#red background
+    'prompt'         => ANSI_GREEN_FG,    #green
+    'debug'          => ANSI_CYAN_FG,     #cyan
+    'normal'         => ANSI_GREEN_FG,    #green
+    'informational'  => ANSI_BLUE_FG,     #blue
+    'notification'   => ANSI_WHITE_FG,    #white
+    'warning'        => ANSI_YELLOW_FG,   #yellow
+    'error'          => ANSI_RED_FG,      #red
+    'critical'       => ANSI_MAGENTA_FG,  #magenta
+    'alert'          => ANSI_MAGENTA_BG,  #magenta background
+    'emergency'      => ANSI_RED_BG,      #red background
 );
 
 $rrdtool_env_vars = array(
@@ -170,7 +222,7 @@ $rrdp_process_types = array(
     'C' => 'client'
 );
 
-$rrdp_aliases = array('?' => 'list', 'exit' => 'quit');
+$rrdp_aliases = array('?' => 'list', 'help' => 'list', 'exit' => 'quit');
 
 $rrdp_help_messages = array(
     '?' => array(
@@ -213,14 +265,14 @@ $rrdp_help_messages = array(
                         ),
                     ),
                     'client'	=> array(
-                        'info'	=> 'Administrate RRDproxy clients',
+                        'info'	=> 'Administrate RRDtool Proxy Server clients',
                         '?'		=> array(
                             'add'	=> 'Add trusted client connection',
                             'remove'=> 'Delete trusted client connection entry',
                         ),
                     ),
                     'cluster'	=> array(
-                        'info'	=> 'Administrate RRDproxy Cluster Peers',
+                        'info'	=> 'Administrate RRDtool Proxy Server Cluster Peers',
                         '?'		=> array(
                             'add'	=> 'Add a trusted peer',
                             'remove'=> 'Remove a trusted peer connection',
