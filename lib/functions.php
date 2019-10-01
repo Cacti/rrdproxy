@@ -238,3 +238,13 @@ function __sig_handler($signo) {
     }
 }
 
+function is_rrdtool_proxy_running() {
+	exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
+	return (sizeof($output) >= 2 ) ? false : true;
+}
+
+function is_rrdcached_running() {
+	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdcached', $output);
+	return (sizeof($output) >= 2 && !$force ) ? false : true;
+}
+

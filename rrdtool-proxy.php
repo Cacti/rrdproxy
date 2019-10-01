@@ -29,6 +29,7 @@ if (!isset($_SERVER["argv"][0]) || isset($_SERVER['REQUEST_METHOD']) || isset($_
 
 chdir(dirname(__FILE__));
 require_once ('./include/global.php');
+require_once ('./lib/functions.php');
 
 /* process calling arguments */
 $parms = $_SERVER["argv"];
@@ -91,14 +92,12 @@ if ( !file_exists('./include/config') || $wizard === true ) {
 	rrd_system__system_boolean_message('test: operation system supported', $support_os, true);
 
 	/* RRDtool Proxy has already been started ? */
-	exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
-	$not_running = (sizeof($output) >= 2 ) ? false : true;
+	$not_running = is_rrdtool_proxy_running();
 	rrd_system__system_boolean_message('test: no proxy instance running', $not_running, true, $force);
 
 	/* RRDtool Cache Daemon has already been started ? */
 	unset($output);
-	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdcached', $output);
-	$not_running = (sizeof($output) >= 2 && !$force ) ? false : true;
+	$not_running = is_rrdcached_running();
 	rrd_system__system_boolean_message('test: no cache instance running', $not_running, true);
 
 	/* check state of required and optional php modules */
@@ -1260,7 +1259,7 @@ function rrdp_cmd__enable($socket, $args) {
 	if ($invalid && !is_null($arg) ) {
 		// If we are invalid and have an argument passed then we
 		// are still invalid if the passwords do not match
-		$invalid = (trim($arg) != trim($rrdp_config['enable_password']));
+		$invalid = !password_verify($arg,$rrdp_config['enable_password']);
 	}
 
 	if (!$invalid) {
@@ -1388,7 +1387,7 @@ function rrdp_cmd__shutdown($socket, $args) {
 
 			}
 
-			fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
+			fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
 			exit ;
 		}
 	}
@@ -2015,7 +2014,6 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 		/* === child === */
 		declare(ticks = 10);
 
-		include ('./lib/functions.php');
 		switch($type) {
 			case 1:
 				include ('./lib/master.php');

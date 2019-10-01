@@ -1,6 +1,7 @@
 # rrdproxy
 
-Cacti RRD Proxy is a standalone proxy interface to Tobi Oetiker's great RRDTool.
+Cacti RRDtool Proxy Server is a standalone proxy interface to Tobi Oetiker's
+great RRDtool.
 
 The main focus of this project is to allow the relocation of RRD files, data
 replication, support of Cacti Boost and, if needed, the RRDcached daemon. It
@@ -23,8 +24,9 @@ Get involved in development by participating in active development on
 
 ## Requirements
 
-RRDproxy runs on any Unix-based operating system that can meet the minimum
-requirements, though it will perform better with the recommended (or higher).
+RRDtool Proxy Server runs on any Unix-based operating system that can meet the
+minimum requirements, though it will perform better with the recommended (or
+higher).
 
 ### Minimum Requirements
 
@@ -58,8 +60,8 @@ All minimum requirements must be met, though the following are more optinal:
 
 ## Usage
 
-Before using the RRDproxy, you must install the system using the setup wizard
-which can be run at any point using the -w parameter.
+Before using the RRDtool Proxy Server, you must install the system using the
+setup wizard which can be run at any point using the -w parameter.
 
 ```shell
  php rrdtool-proxy.php --help
@@ -106,7 +108,7 @@ CLI System Prompt | rrdp | Max 8 chars
 IPv4 Listen Addr | 0.0.0.0 | Listen all addr
 Client Proxy Port | 40301 | Connections from a client
 Proxy Proxy port | 40302 | Connections from another proxy
-Dedicated CLI port | 40303 | Connections to the RRDproxy cli
+Dedicated CLI port | 40303 | Connections to the proxy cli
 
 If the wizard displays a prompt that requires a response and it has no default,
 you will be prompted again until a valid response has been entered.
@@ -114,10 +116,13 @@ you will be prompted again until a valid response has been entered.
 ## Command Line Interface
 
 Use '?' or 'help' to get a list of all commands being supported by the proxy or
-hints about missing parameters.  The following shows an enable of using the CLI
-to list the available commands to find the version of RRDproxy.  
+hints about missing parameters.  The following shows an example of using the CLI
+to list the available commands to find the version of RRDtool Proxy Server.  
 
-Note: that most commands require that the CLI is in privileged mode.
+Note: that most commands require that the CLI is in privileged mode and this
+password is encrypted in the configuration so cannot be guessed.  If the
+password has been forgotten, it can be reset using the RRDtool Proxy
+Server Wizard but the background process will need to be manually terminated.
 
 ```
 telnet localhost 40303
@@ -195,10 +200,4 @@ rrdp#
 
   Currently, the RRDproxy wizard and command line interface port are both
   offering only english as the default langauge.
-
-- Encrypted password storage
-
-  Ensure that the enable password is encrypted at the system level to provide a
-  higher level of security.  This could also potentially allow remote access to
-  the system CLI.
 

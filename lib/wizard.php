@@ -68,21 +68,28 @@ function wizard() {
 	require_once('Crypt/Rijndael.php');
 
 	#### -- WELCOME -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              1/8 " . ANSI_RESET, false, true, true);
+	wizard_handle_title(1, 'Welcome');
+	wizard_handle_output( rrdp_get_cacti_proxy_logo(), true, true);
+
 	$msg = 'Welcome to the Wizard of the RRDtool Proxy Server, brought to you by the Cacti Group. ' . PHP_EOL . PHP_EOL
 		. 'This tool allows you to setup the RRDtool Proxy Server for the first time as well or to reconfigure an existing configuration. '
-		. 'You can abort this script anytime with CTRL+C and restart this wizard with following command: ' . PHP_EOL . PHP_EOL
-		. '    ' . ANSI_BOLD . ANSI_YELLOW_FG . '<path_to_php> ./rrdtool-proxy.php --wizard' . ANSI_RESET . PHP_EOL . PHP_EOL
-		. 'When editing a value, any existing or default value will be shown in square brackets. To accept these, simply press ENTER to reuse them. ' . PHP_EOL . PHP_EOL
-		. 'Once the configuration file has been updated, any running instance of RRDtool Proxy Server will need to be restarted to pick these changes up.';
-
-	wizard_handle_output( rrdp_get_cacti_proxy_logo(), true, true);
+		. 'You can abort this script anytime with CTRL+C and restart this wizard with the command: ';
 	wizard_handle_output( wordwrap($msg, 75), true, true);
+
+	$msg = ANSI_BOLD . '<path_to_php> ./rrdtool-proxy.php --wizard' . ANSI_RESET;
+	wizard_handle_output( wizard_prompt_wordwrap('Example', $msg, 75), true, true);
+
+	$msg = 'When editing a value, any existing or default value will be shown in square brackets. '
+		. 'To accept these, simply press ENTER to reuse them. ' . PHP_EOL . PHP_EOL
+		. 'Once the configuration file has been updated, any running instance of RRDtool '
+		. 'Proxy Server will need to be restarted to pick these changes up.';
+	wizard_handle_output( wordwrap($msg, 75), true, true);
+
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
 	wizard_handle_input(ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
 
 	#### -- SYSTEM REQUIREMENTS -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              2/8 " . ANSI_RESET, false, true, true);
+	wizard_handle_title(2,'Requirements');
 	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
 
 	wizard_handle_output('Checking System Requirements...', true);
@@ -156,27 +163,33 @@ function wizard() {
 
 
 	#### -- DATA ENCRYPTION -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              3/8 " . ANSI_RESET, false, true, true);
+	wizard_handle_title(3,'Security');
 	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
 
 	$microtime_start = microtime(true);		// reset system start time
 
-	$msg = 'All RRDtool Proxy Server communications between client and proxy, or proxy and proxy, are encrypted for security reasons. The only unencrypted '
-		. 'connections that can be made are to the local CLI port as these are not transmitted over the network. ' . PHP_EOL . PHP_EOL
-		. 'For more technical information, the data that is transmitted over the wider network is encrypted by single-use AES keys of 192Bit '
-		. 'with 2048Bit RSA used for the key exchange. ' .PHP_EOL . PHP_EOL
-		. ANSI_BOLD . ANSI_YELLOW_FG . 'Note:' . ANSI_RESET . ' this version of RRDtool Proxy Server does currently not have an embedded RSA key rotation process so the same RSA key is used '
-		. 'for the lifetime of the process.';
-
 	if($system__public_key & $system__private_key) {
-		$msg .= PHP_EOL
-			. PHP_EOL . ANSI_BOLD . ANSI_GREEN_FG . "**RSA key-pair detected:"
+		$msg = 'All RRDtool Proxy Server communications between client and proxy, or proxy and proxy, '
+			. 'are encrypted for security reasons. The only unencrypted connections that can be made '
+			. 'are to the local CLI port as these are not transmitted over the network. ' . PHP_EOL . PHP_EOL
+			. 'For more technical information, the data that is transmitted over the wider network is '
+			. 'encrypted by single-use AES keys of 192Bit with 2048Bit RSA used for the key exchange. ';
+		wizard_handle_output(wordwrap($msg, 75), true, true);
+
+		$msg = 'This version of RRDtool Proxy Server does currently not have an embedded RSA key rotation '
+			. 'process so the same RSA key is used for the lifetime of the process.';
+		wizard_handle_output(wizard_prompt_wordwrap('Note', $msg, 75), true, true);
+
+		$msg = ANSI_BOLD . ANSI_GREEN_FG . "**RSA key-pair detected:"
 			. PHP_EOL . "  Public Key  (last updated: " . date ("F d Y H:i:s", filemtime('./include/public.key')) . ")"
-			. PHP_EOL . "  Private Key (last updated: " . date ("F d Y H:i:s", filemtime('./include/private.key')) . ")" . ANSI_RESET . PHP_EOL
-			. PHP_EOL . ANSI_BOLD . "Would you like to reuse the existing RSA key-pair? [y/n]" . ANSI_RESET;
+			. PHP_EOL . "  Private Key (last updated: " . date ("F d Y H:i:s", filemtime('./include/private.key')) . ")" . ANSI_RESET;
+
+		wizard_handle_output(wordwrap($msg, 75), true, true);
+
+		$msg = ANSI_BOLD . "Would you like to reuse the existing RSA key-pair? [y/n]" . ANSI_RESET;
 		$pattern = '/[yYnN]/';
 		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
-		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
+		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true, false, false, true) );
 		$microtime_start = microtime(true);	// reset system start time
 		if($input == 'Y') {
 			rrd_system__system_boolean_message( 'load: RSA public key', $system__public_key, true );
@@ -203,20 +216,21 @@ function wizard() {
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
 	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
 
-
 	#### -- SYSTEM Parameters -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              4/8 " . ANSI_RESET, false, true, true);
+	wizard_handle_title(4,'System Parameters');
 	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
 
 	$msg = 'This section allows to modify different system and connection parameters of RRDtool Proxy Server. ' . PHP_EOL . PHP_EOL
-		. 'If you are unsure whether you should modify a value, the default or current value shown in square brackets, eg [rrdp]' . PHP_EOL . PHP_EOL
-		. 'This can be accepted by just pressing ' . ANSI_BOLD . ANSI_YELLOW_FG . 'ENTER' . ANSI_RESET;
-	wizard_handle_output( wordwrap($msg, 75), true, true);
+		. 'If you are unsure whether you should modify a value, the default or current value may be shown in square brackets, eg [' . ANSI_BOLD . ANSI_YELLOW_FG . 'rrdp' . ANSI_RESET . ']' . PHP_EOL . PHP_EOL
+		. 'The shown default can be accepted by pressing ';
+	wizard_handle_output( wordwrap($msg, 75) . ANSI_BOLD . ANSI_YELLOW_FG . 'ENTER' . ANSI_RESET, true, true);
 
 	if($system__config_tmp) {
 		$msg = ANSI_BOLD . ANSI_GREEN_FG . "**Temporary Wizard Configuration detected:"
-			. PHP_EOL . "  Temporary configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/config.tmp')) . ")" . ANSI_RESET . PHP_EOL
-			. PHP_EOL . ANSI_BOLD . "Would you like to reload all configuration parameters of your last wizard session? [y/n]" . ANSI_RESET;
+			. PHP_EOL . "  Temporary configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/config.tmp')) . ")" . ANSI_RESET;
+		wizard_handle_output( wordwrap($msg, 75), true, true);
+
+		$msg = ANSI_BOLD . "Would you like to reload all configuration parameters of your last wizard session? [y/n]" . ANSI_RESET;
 		$pattern = '/[yYnN]/';
 		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
 		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
@@ -229,12 +243,15 @@ function wizard() {
 			rrd_system__system_boolean_message( ' delete: Temporary session data', $status, false );
 		}
 		unset($rrdp_config_tmp);
+		wizard_handle_output( '', true, true);
 	}
 
 	if($system__config) {
 		$msg = ANSI_BOLD . ANSI_GREEN_FG . "**RRDtool Proxy Server - Configuration detected:"
-			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/config')) . ")" . ANSI_RESET . PHP_EOL
-			. PHP_EOL . ANSI_BOLD . "Would you like to reload all parameters of this configuration file? " . ($system__config_tmp ? '(Note: This will overwrite one or more attributes of session data being restored one step before.) ' : '' ) . "[y/n]" . ANSI_BOLD;
+			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/config')) . ")" . ANSI_RESET;
+		wizard_handle_output( wordwrap($msg, 75), true, true);
+
+		$msg = ANSI_BOLD . "Would you like to reload all parameters of this configuration file? " . ($system__config_tmp ? '(Note: This will overwrite one or more attributes of session data being restored one step before.) ' : '' ) . "[y/n]" . ANSI_RESET;
 		$pattern = '/[yYnN]/';
 		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
 		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
@@ -360,46 +377,32 @@ function wizard() {
 		'enable_password' => array(
 			'msg' => 'Enable password for CLI elevation',
 			'filter' => FILTER_VALIDATE_REGEXP,
-			'pattern' => '/^(?=.*[A-Z])(?=.*[0-9])(?=.*[a-z]).{8}$/',
-			'help' => 'Password must contain 1 upper char, 1 lower char, 1 number, 8 chars minimum'
+			'pattern' => '/^$|(?=.*[A-Z])(?=.*[0-9])(?=.*[a-z]).{8}$/',
+			'help' => 'Password must contain 1 upper char, 1 lower char, 1 number, 8 chars minimum',
+			'hide_value' => true,
+			'required' => true
 		),
 	);
 
-	wizard_handle_output( PHP_EOL . PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - Settings:" . ANSI_RESET . PHP_EOL, false, false);
-
 	$attribute_count = 0;
-	foreach( $active_config as $attribute => $value) {
-		if(isset($rrdp_default_config_inputs[$attribute])) {
-
-			if(isset($rrdp_default_config_inputs[$attribute]['filter_options'])) {
-				$filter_options['options'] = $rrdp_default_config_inputs[$attribute]['filter_options'];
-			} else {
-				$filter_options = array();
-				if($rrdp_default_config_inputs[$attribute]['filter'] == FILTER_VALIDATE_REGEXP) {
-					$filter_options = array('options'=>array('regexp'=>$rrdp_default_config_inputs[$attribute]['pattern']));
-				}
-			}
-
-			$attr_prompt = rrdp_get_attr_prompt($attribute_count);
-			$attr_suffix = ($attribute == 'enable_password') ? ':' : PHP_EOL . PHP_EOL . $attr_prompt['padding'] . sprintf("[%s]: ", $value);
-			$input = wizard_handle_input( wordwrap( $attr_prompt['ansi'] . $rrdp_default_config_inputs[$attribute]['msg'], 75, PHP_EOL . $attr_prompt['padding']) . $attr_suffix, $rrdp_default_config_inputs[$attribute]['filter'], $filter_options, (isset($rrdp_default_config_inputs[$attribute]['help']) ? $rrdp_default_config_inputs[$attribute]['help'] : false), true);
-			if($input) {
-				$active_config[$attribute] = $input;
-			}
-			if($attribute == 'ip_version') {
-				unset($rrdp_default_config_inputs['address_' . (($active_config[$attribute] == 4) ? 6 : 4)]);
-			}
-			file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
-		}
-	}
+	wizard_handle_settings($rrdp_default_config_inputs, $active_config, $attribute_count);
 
 	#### -- Archive Settings -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              5/8 " . ANSI_RESET, false, true, true);
-	$msg = 'RRDtool Proxy Server supports to archive RRD files automatically before their removal everytime an unlink command has been received. '
-		. 'Instead of deleting the related file it will just move it to the archive directory under use of the original subfolder structure. '
-		. 'The proxy only stores a single instance of a RRD file. Multiple instances will not be supported.' . "\r\n\r\n"
-		. 'Please note that if you are running a proxy server cluster then this feature has to be enabled or disabled on every peer, because the archive itself will be included in the replication process.';
+	wizard_handle_title(5,'Archive Parameters');
+	$msg = 'RRDtool Proxy Server supports to archive RRD files automatically before '
+		. 'their removal. Instead of deleting the related file it will just move it '
+		. 'to the archive directory keeping the original subfolder structure. ';
+	wizard_handle_output( rrdp_get_cacti_proxy_logo(), true, true);
 	wizard_handle_output( wordwrap($msg, 75), true, true);
+
+	$msg = 'The proxy only stores a single instance of an RRD file. Multiple instances '
+		. 'will not be supported.';
+	wizard_handle_output( wizard_prompt_wordwrap('Note', $msg, 75), true, true);
+
+	$msg = 'If you are running a proxy server cluster then this feature MUST be enabled '
+		. 'or disabled on every peer, because the archive itself will be included in '
+		. 'the replication process.';
+	wizard_handle_output( wizard_prompt_wordwrap('Warning', $msg, 75), true, true);
 
 	$msg = ANSI_BOLD . "Would you like to archive decomissioned RRD files automatically? [y/n]" . ANSI_RESET;
 
@@ -408,7 +411,7 @@ function wizard() {
 	$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
 	if($input == 'Y') {
 
-		$rrdp_default_config_inputs = array(
+		$rrdp_archive_config_inputs = array(
 			'path_rra_archive' => array(
 				'msg' => 'Absolute(!) path to the RRA ARCHIVE folder containing all archived RRDfiles',
 				'filter' => FILTER_CALLBACK,
@@ -416,38 +419,15 @@ function wizard() {
 			),
 		);
 
-		wizard_handle_output( PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - Archive Settings:" . ANSI_RESET . PHP_EOL, false, false);
-		foreach( $active_config as $attribute => $value) {
-			if(isset($rrdp_default_config_inputs[$attribute])) {
-
-				if(isset($rrdp_default_config_inputs[$attribute]['filter_options'])) {
-					$filter_options['options'] = $rrdp_default_config_inputs[$attribute]['filter_options'];
-				} else {
-					$filter_options = array();
-					if($rrdp_default_config_inputs[$attribute]['filter'] == FILTER_VALIDATE_REGEXP) {
-						$filter_options = array('options'=>array('regexp'=>$rrdp_default_config_inputs[$attribute]['pattern']));
-					}
-				}
-
-				$attr_prompt = rrdp_get_attr_prompt($attribute_count);
-				$attr_suffix = ($attribute == 'enable_password') ? ':' : PHP_EOL . PHP_EOL . $attr_prompt['padding'] . sprintf("[%s]: ", $value);
-				$input = wizard_handle_input( wordwrap( $attr_prompt['ansi'] . $rrdp_default_config_inputs[$attribute]['msg'], 75, PHP_EOL . $attr_prompt['padding']) . $attr_suffix, $rrdp_default_config_inputs[$attribute]['filter'], $filter_options, (isset($rrdp_default_config_inputs[$attribute]['help']) ? $rrdp_default_config_inputs[$attribute]['help'] : false), true);
-				if($input) {
-					$active_config[$attribute] = $input;
-				}
-				file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
-			}
-		}
+		wizard_handle_settings($rrdp_archive_config_inputs, $active_config, $attribute_count, 'Archive');
 
 	} else {
 		$active_config['path_rra_archive'] = '';
 		file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
 	}
-	wizard_handle_output( '', true, true);
-
 
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
-	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to save new system configuration ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true );
+	wizard_handle_input( ANSI_BOLD . "Press ENTER to save new system configuration ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true );
 	$microtime_start = microtime(true);	// reset system start time
 	rrd_system__system_boolean_message( '   save: New system configuration', file_put_contents('./include/config', '<?php $rrdp_config = ' . var_export($active_config, true) . ';'), true );
 	rrd_system__system_boolean_message( ' delete: Temporary session data', unlink('./include/config.tmp'), true );
@@ -456,14 +436,21 @@ function wizard() {
 	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
 
 	#### -- Cache Settings -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              6/8 " . ANSI_RESET, false, true, true);
-	$msg = 'If you are NOT making use of any other I/O cache like Cacti\'s "Boost" process, you can setup the proxy to manage its own cache using a daemon called '
+	wizard_handle_title(6,'Cached Parameters');
+	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
+
+	$msg = 'If you are NOT making use of any other I/O cache like Cacti\'s "Boost" process, '
+		. 'you can setup the proxy to manage its own cache using a daemon called '
 		. '"RRDcached" that comes with RRDtool itself. ' . PHP_EOL . PHP_EOL
-		. 'Using RRDcached can dramatically reduce the I/O load of your file system and avoid, if configured correctly, RRD files from being '
-		. 'updated with every update command that is received.' . PHP_EOL . PHP_EOL . ANSI_BOLD . ANSI_YELLOW_FG . 'Note:' . ANSI_RESET
-		. 'RRDcached does NOT SUPPORT updates in combination with both RRDtool flags "--skip-past-updates" and "templates".' . PHP_EOL . PHP_EOL
-		. 'If you are using the RRDtool Proxy Server as data backend for Cacti, it is strongly recommended to leave this add-on being disabled.';
+		. 'Using RRDcached can dramatically reduce the I/O load of your file '
+		. 'system and avoid, if configured correctly, RRD files from being '
+		. 'updated with every update command that is received.';
 	wizard_handle_output( wordwrap($msg, 75), true, true);
+
+	$msg = 'RRDcached does NOT SUPPORT updates in combination with both RRDtool flags "--skip-past-updates" '
+		. 'and "templates". If you are using the RRDtool Proxy Server as data backend for Cacti, '
+		. 'it is strongly recommended to leave this add-on being disabled.';
+	wizard_handle_output( wizard_prompt_wordwrap('Warning', $msg, 75), true, true);
 
 	$msg = ANSI_BOLD . "Would you like to enable the use of RRDCached? [y/n]" . ANSI_RESET;
 
@@ -505,38 +492,14 @@ function wizard() {
 
 		);
 
-		wizard_handle_output( PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - RRDcached Settings:" . ANSI_RESET . PHP_EOL, false, false);
-		foreach( $active_config as $attribute => $value) {
-			if(isset($rrdp_rrdcached_config_inputs[$attribute])) {
-
-				if(isset($rrdp_rrdcached_config_inputs[$attribute]['filter_options'])) {
-					$filter_options['options'] = $rrdp_rrdcached_config_inputs[$attribute]['filter_options'];
-				} else {
-					$filter_options = array();
-					if($rrdp_rrdcached_config_inputs[$attribute]['filter'] == FILTER_VALIDATE_REGEXP) {
-						$filter_options = array('options'=>array('regexp'=>$rrdp_rrdcached_config_inputs[$attribute]['pattern']));
-					}
-				}
-
-				$attr_prompt = rrdp_get_attr_prompt($attribute_count);
-				$attr_suffix = ($attribute == 'enable_password') ? ':' : PHP_EOL . PHP_EOL . $attr_prompt['padding'] . sprintf("[%s]: ", $value);
-				$input = wizard_handle_input( wordwrap( $attr_prompt['ansi'] . $rrdp_rrdcached_config_inputs[$attribute]['msg'], 75, PHP_EOL . $attr_prompt['padding']) . $attr_suffix, $rrdp_rrdcached_config_inputs[$attribute]['filter'], $filter_options, (isset($rrdp_rrdcached_config_inputs[$attribute]['help']) ? $rrdp_rrdcached_config_inputs[$attribute]['help'] : false), true);
-				if($input) {
-					$active_config[$attribute] = $input;
-				}
-				file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
-			}
-		}
-
+		wizard_handle_settings($rrdp_rrdcached_config_inputs, $active_config, $attribute_count, 'RRDcached');
 	} else {
 		$active_config['path_rrdcached'] = '';
 		file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
 	}
-	wizard_handle_output( '', true, true);
-
 
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
-	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to save new system configuration ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true );
+	wizard_handle_input( ANSI_BOLD . "Press ENTER to save new system configuration ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true );
 	$microtime_start = microtime(true);	// reset system start time
 	rrd_system__system_boolean_message( '   save: New system configuration', file_put_contents('./include/config', '<?php $rrdp_config = ' . var_export($active_config, true) . ';'), true );
 	rrd_system__system_boolean_message( ' delete: Temporary session data', unlink('./include/config.tmp'), true );
@@ -545,17 +508,34 @@ function wizard() {
 	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
 
 	#### -- Client Connections -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              7/8 " . ANSI_RESET, false, true, true);
-	$msg = 'This version does not support the automatic registration of new trusted clients - these have to be defined manually. '
-		. 'To decide whether a client has the permission to access RRDs through the proxy its IP address as well as the fingerprint '
-		. 'of its current public RSA key has to be registered to RRDtool Proxy Server.' .  PHP_EOL
-		. 'Please note: Every kind of external device, like a Cacti poller for example, is a RRDtool Proxy Server client. Other RRDproxies have to be registered in section 7.';
+	wizard_handle_title(7,'Trusted Clients');
+	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
+
+	$msg = 'This version does not support the automatic registration of trusted clients, these have '
+		. 'to be added manually using either this wizard or the admin CLI console.  To allow a '
+		. 'client permission to access RRDs through the RRDtool Proxy Server, its IP address and '
+		. 'RSA fingerprint must be registered.';
 	wizard_handle_output( wordwrap($msg, 75), true, true);
+
+	$msg = 'Cacti shows its RSA fingerprint in the web console and can be found by navigating '
+		. 'to Console -> Utilities -> System Utilites, then looking for RSA Fingerprint on '
+		. 'the summary tab';
+	wizard_handle_output( wizard_prompt_wordwrap('Example', $msg, 75), true, true);
+
+	$msg = 'Other RRDproxies can be registered in Step 8 and should not be included here as it '
+		. 'will not be used.';
+	wizard_handle_output( wizard_prompt_wordwrap('Note', $msg, 75), true, true);
+
+	$msg = 'Within the admin CLI console, it is possible to add/remove other clients '
+		. 'dynamically. For example, "set client add <IP> <Port> <Fingerprint>"';
+	wizard_handle_output( wizard_prompt_wordwrap('Tip', $msg, 75), true, true);
 
 	if($system__clients) {
 		$msg = ANSI_BOLD . ANSI_GREEN_FG . "**RRDtool Proxy Server - Trusted Clients detected:"
-			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/clients')) . ")" . ANSI_RESET . PHP_EOL
-			. PHP_EOL . ANSI_BOLD . "Would you like to reuse all entries of this configuration file? [y/n]" . ANSI_RESET;
+			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/clients')) . ")" . ANSI_RESET;
+		wizard_handle_output( wordwrap($msg, 75), true, true);
+
+		$msg = ANSI_BOLD . "Would you like to reuse all entries of this configuration file? [y/n]" . ANSI_RESET;
 		$pattern = '/[yYnN]/';
 		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
 		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
@@ -577,7 +557,6 @@ function wizard() {
 			$status = unlink('./include/clients');
 			rrd_system__system_boolean_message( ' delete: Trusted Client Connections', $status, false );
 		}
-		wizard_handle_output( '', true, true);
 	}
 
 	$pattern = '/[yYnN]/';
@@ -593,13 +572,10 @@ function wizard() {
 		if($input == 'N') {
 			$microtime_start = microtime(true);	// reset system start time
 			rrd_system__system_boolean_message( ' save: New client configuration', file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_remote_clients, true) . ';'), true );
-			wizard_handle_output( '', true, false);
 			if(!sizeof($rrdp_remote_clients)>0) {
-				$msg = '**Warning: You haven\'t defined any trusted client connection yet. External systems will not be able to connect to the proxy.';
+				$msg = ANSI_BOLD . ANSI_YELLOW_FG . '**Warning: You haven\'t defined any trusted client connection yet. External systems will not be able to connect to the proxy.' . ANSI_RESET;
 				wizard_handle_output( wordwrap($msg, 75), true, true);
 			}
-			$msg = 'Tip: Use "set client add <IP> <Fingerprint>" within the admin console to add new clients dynamically.';
-			wizard_handle_output( wordwrap($msg, 75), true, true);
 			break;
 		} elseif ($input == 'Y') {
 			$client_ip = wizard_handle_input('IP:', FILTER_VALIDATE_IP, false, '% Invalid IPv4 or IPv6 address format');
@@ -609,19 +585,27 @@ function wizard() {
 	}
 
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
-	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
+	wizard_handle_input( ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
 
 
 	#### -- Proxy-2-Proxy Connections -- ####
-	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Wizard                                              8/8 " . ANSI_RESET, false, true, true);
+	wizard_handle_title(8,'Trusted Proxies');
+	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
+
 	$msg = 'This version does not support the automatic registration of new proxy cluster members - these have to be defined manually. '
 		. 'To decide whether a cluster member has the correct permissions its IP address as well as the fingerprint of its current public RSA key has to be registered to the RRDtool Proxy Server.';
 	wizard_handle_output( wordwrap($msg, 75), true, true);
 
+	$msg = 'Within the admin CLI console, it is possible to add/remove other proxies '
+		. 'dynamically. For example, "set proxy add <IP> <Port> <Fingerprint>"';
+	wizard_handle_output( wizard_prompt_wordwrap('Tip', $msg, 75), true, true);
+
 	if($system__proxies) {
 		$msg = ANSI_BOLD . ANSI_GREEN_FG . "**RRDtool Proxy Server - Trusted Proxies detected:"
-			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/proxies')) . ")" . ANSI_RESET . PHP_EOL
-			. PHP_EOL . ANSI_BOLD . "Would you like to reuse all entries of this configuration file? [y/n]" . ANSI_RESET;
+			. PHP_EOL . "  Configuration file (last updated: "  . date ("F d Y H:i:s", filemtime('./include/proxies')) . ")" . ANSI_RESET;
+		wizard_handle_output( wordwrap($msg, 75), true, true);
+
+		$msg = ANSI_BOLD . "Would you like to reuse all entries of this configuration file? [y/n]" . ANSI_RESET;
 		$pattern = '/[yYnN]/';
 		$filter_options = array("options"=>array("regexp"=>"/[yYnN]/"));
 		$input = strtoupper( wizard_handle_input( wordwrap($msg, 75), FILTER_VALIDATE_REGEXP, $filter_options, false, true) );
@@ -660,9 +644,6 @@ function wizard() {
 			$microtime_start = microtime(true);	// reset system start time
 			rrd_system__system_boolean_message( ' save: New proxy configuration', file_put_contents('./include/proxies', '<?php $rrdp_remote_proxies = ' . var_export($rrdp_remote_proxies, true) . ';'), true );
 			wizard_handle_output( '', true, false);
-
-			$msg = 'Tip: Use "set proxy add <IP> <Port> <Fingerprint>" within the admin console to add new clients dynamically.';
-			wizard_handle_output( wordwrap($msg, 75), true, true);
 			break;
 		} elseif ($input == 'Y') {
 			$client_ip = wizard_handle_input('IP:', FILTER_VALIDATE_IP, false, '% Invalid IPv4 or IPv6 address format');
@@ -674,8 +655,19 @@ function wizard() {
 
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));
 	wizard_handle_input( PHP_EOL . ANSI_BOLD . "Press ENTER to continue ..." . ANSI_RESET, FILTER_VALIDATE_REGEXP, $filter_options, false, true ) ;
-}
 
+	wizard_handle_title(9, 'Finished');
+	wizard_handle_output(rrdp_get_cacti_proxy_logo(), true, true);
+
+	$msg = 'RRDtool Proxy Server v' . RRDP_VERSION . ' configuration has now been updated.' . PHP_EOL . PHP_EOL
+		. 'You may now ' . (is_rrdtool_proxy_running() ? 're' : '') . 'start RRDtool Proxy Server '
+		. 'to pick up the new configuration.  Once started, you may telnet to the admin CLI port via '
+		. 'telnet.';
+	wizard_handle_output(wordwrap($msg, 75), true, true);
+
+	$msg = 'telnet 127.0.0.1 ' . $active_config['port_admin'] . PHP_EOL;
+	wizard_handle_output(wizard_prompt_wordwrap('Example', $msg, 75), true, true);
+}
 
 function wizard_verify_rrdtool($path) {
 	global $active_config;
@@ -773,13 +765,16 @@ function wizard_handle_output($msg, $new_line=false, $new_line_after=false, $cle
 	fwrite(STDOUT, ($clear_commandline_screen ? ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT : '' ) . ($new_line ? PHP_EOL : '') . $msg . ($new_line_after ? PHP_EOL : ''));
 }
 
-function wizard_handle_input($msg, $filter=FILTER_DEFAULT, $filter_options=false, $filter_help_msg=false, $new_line=false, $new_line_after=false, $clear_commandline_screen=false) {
+function wizard_handle_input($msg, $filter=FILTER_DEFAULT, $filter_options=false, $filter_help_msg=false, $new_line=false, $new_line_after=false, $clear_commandline_screen=false, $require_value=false) {
 	while(1!=0) {
 
 		wizard_handle_output($msg . ' ', $new_line, $new_line_after, $clear_commandline_screen);
 
 		$input = trim(fgets(STDIN));
 		$filtered_value = filter_var($input, $filter, $filter_options);
+		if ($require_value && empty($filtered_value)) {
+			$filtered_value = false;
+		}
 
 		if ($filtered_value !== false) {
 			return $filtered_value;
@@ -792,7 +787,7 @@ function wizard_handle_input($msg, $filter=FILTER_DEFAULT, $filter_options=false
 	}
 }
 
-function rrdp_get_attr_prompt(&$attribute_count) {
+function wizard_get_prompt(&$attribute_count) {
 	$attr_part1 = $attribute_count % 26;
 	$attr_part2 = ($attribute_count - $attr_part1) / 26;
 
@@ -804,3 +799,70 @@ function rrdp_get_attr_prompt(&$attribute_count) {
 	return $attr_prompt;
 }
 
+function wizard_handle_title($page, $title = '') {
+	$title_prefix = "   RRDtool Proxy Server Wizard";
+	if (!empty($title)) {
+		$title_prefix .= ' - ' .$title;
+	}
+
+	$title_suffix = "$page/9   ";
+	$title_spaces = strlen($title_prefix) + strlen($title_suffix);
+	if ($title_spaces > 75) {
+		$title_prefix = substr($title_prefix, 1, 75 - $title_suffix);
+		$title_spaces = 75;
+	}
+
+	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . $title_prefix .
+		str_repeat(' ', 80 - $title_spaces) . $title_suffix . ANSI_RESET, false, true, true);
+}
+function wizard_handle_settings($inputs, &$active_config, &$attribute_count, $title = '') {
+	global $rrd_config_tmp;
+
+	if (empty($title)) {
+		$title = '';
+	} else {
+		$title .= ' ';
+	}
+
+	wizard_handle_output( PHP_EOL . PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - ${title}Settings:" . ANSI_RESET . PHP_EOL, false, false);
+
+	foreach( $active_config as $attribute => $value) {
+		if(isset($inputs[$attribute])) {
+
+			if(isset($inputs[$attribute]['filter_options'])) {
+				$filter_options['options'] = $inputs[$attribute]['filter_options'];
+			} else {
+				$filter_options = array();
+				if($inputs[$attribute]['filter'] == FILTER_VALIDATE_REGEXP) {
+					$filter_options = array('options'=>array('regexp'=>$inputs[$attribute]['pattern']));
+				}
+			}
+
+			$attr_prompt = wizard_get_prompt($attribute_count);
+			$attr_suffix = !empty($inputs[$attribute]['hide_value']) ? ':' : PHP_EOL . PHP_EOL . $attr_prompt['padding'] . sprintf('[' . ANSI_BOLD . ANSI_YELLOW_FG . '%s' . ANSI_RESET . ']: ', $value);
+			$input = wizard_handle_input( $attr_prompt['ansi'] . wordwrap($inputs[$attribute]['msg'], 75, PHP_EOL . $attr_prompt['padding']) . $attr_suffix, $inputs[$attribute]['filter'], $filter_options, (isset($inputs[$attribute]['help']) ? $inputs[$attribute]['help'] : false), true, false, false, !empty($inputs[$attribute]['required']));
+			if($attribute == 'enable_password' && !empty($input)) {
+				$input = password_hash($input, PASSWORD_DEFAULT);
+			}
+
+			if($input) {
+				$active_config[$attribute] = $input;
+			}
+
+			// Is this the IP version attribute? (eg, IPv4 or IPv6)
+			if($attribute == 'ip_version') {
+				// Unset the address for the protocol we are not using
+				unset($inputs['address_' . (($active_config[$attribute] == 4) ? 6 : 4)]);
+			}
+
+			file_put_contents('./include/config.tmp', '<?php $rrdp_config_tmp = ' . var_export($active_config, true) . ';');
+		}
+	}
+}
+
+function wizard_prompt_wordwrap($prompt, $msg, $length) {
+	$prompt = (empty($prompt) ? '' : $prompt . ': ');
+	$prompt_len = strlen($prompt);
+	return ANSI_BOLD . ANSI_YELLOW_FG . $prompt . ANSI_RESET .
+		wordwrap($msg, $length - $prompt_len, PHP_EOL . str_repeat(' ', $prompt_len));
+}
