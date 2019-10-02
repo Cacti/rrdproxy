@@ -52,9 +52,11 @@ if (sizeof($parms) != 0) {
 			case "-f" :
 				$force = true;
 				break;
-			case "-h" :
 			case "-v" :
 			case "--version" :
+				display_version();
+				exit;
+			case "-h" :
 			case "--help" :
 				display_help();
 				exit ;
@@ -163,16 +165,16 @@ pcntl_signal(SIGUSR2, "rrdp_sig_handler");
 
 /* setup running config */
 rrdp_system__encryption_init();
-$rrdp_config['path_base']		= dirname(__FILE__);
-$rrdp_config['path_cli']		= $rrdp_config['path_base'] . '/cli';
-$rrdp_config['path_include']	= $rrdp_config['path_base'] . '/include';
-$rrdp_config['path_library']	= $rrdp_config['path_base'] . '/lib';
+$rrdp_config['path_base']      = dirname(__FILE__);
+$rrdp_config['path_cli']       = $rrdp_config['path_base'] . '/cli';
+$rrdp_config['path_include']   = $rrdp_config['path_base'] . '/include';
+$rrdp_config['path_library']   = $rrdp_config['path_base'] . '/lib';
 
-$rrdp_config['start']			= microtime(true);
-$rrdp_config['last_sync']		= true;
-$rrdp_config['remote_clients']	= isset($rrdp_remote_clients) ? $rrdp_remote_clients : array();
-$rrdp_config['remote_proxies']	= isset($rrdp_remote_proxies) ? $rrdp_remote_proxies : array();
-$rrdp_config['address']			= ($rrdp_config['ip_version'] == 4) ? $rrdp_config['address_4'] : $rrdp_config['address_6'];
+$rrdp_config['start']          = microtime(true);
+$rrdp_config['last_sync']      = true;
+$rrdp_config['remote_clients'] = isset($rrdp_remote_clients) ? $rrdp_remote_clients : array();
+$rrdp_config['remote_proxies'] = isset($rrdp_remote_proxies) ? $rrdp_remote_proxies : array();
+$rrdp_config['address']        = ($rrdp_config['ip_version'] == 4) ? $rrdp_config['address_4'] : $rrdp_config['address_6'];
 
 /* configure socket server presets */
 declare(ticks = 10);
@@ -2081,15 +2083,21 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 	}
 }
 
+/*	display_version - displays the version of the RRDproxy */
+function display_version() {
+	$output = "RRDtool Proxy Server v" . RRDP_VERSION . ", " . COPYRIGHT_YEARS . "\r\n";
+	fwrite(STDOUT, $output);
+}
+
 /*	display_help - displays the usage of the RRDproxy */
 function display_help() {
-	$output = "\r\n" . " RRDtool Proxy Server v" . RRDP_VERSION
-		. "\r\n" . " " . COPYRIGHT_YEARS
-		. "\r\n" . " usage: rrdtool-proxy.php [--wizard] [-w] [--version] [-v] [--force] [-f]"
-		. "\r\n" . " Optional:"
-		. "\r\n" . " -v --version   - Display this help message"
-		. "\r\n" . " -w --wizard    - Start Configuration Wizard"
-		. "\r\n" . " -f --force     - Allow multiple proxy instances running on a single server"
+	display_version();
+	$output = "\r\n" . "Usage: rrdtool-proxy.php [-w|--wizard] [-v|--version] [-h|--help] [-f|--force]\r\n"
+		. "\r\n" . "Optional:"
+		. "\r\n" . "    -v --version   - Display the version of RRDtool Proxy Server"
+		. "\r\n" . "    -h --help      - Display this help"
+		. "\r\n" . "    -w --wizard    - Start Configuration Wizard"
+		. "\r\n" . "    -f --force     - Allow multiple proxy instances running on a single server"
 		. "\r\n" . "\r\n";
 	fwrite(STDOUT, $output);
 }
