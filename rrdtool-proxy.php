@@ -394,6 +394,8 @@ while ($__server_listening) {
 							$rrdp_admin_sockets[$key] = $socket_descriptor;
 							$rrdp_admin_clients[$key] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'logging_severity_console' => $rrdp_config['logging_severity_terminal'], 'logging_category_console' => $rrdp_config['logging_category_terminal'], 'debug' => false, 'type' => 'srv');
 
+							socket_write($socket_descriptor, rrdp_get_cacti_proxy_logo() . "\r\n\r\n");
+							socket_Write($socket_descriptor, RRDP_VERSION_FULL);
 							socket_write($socket_descriptor, ANSI_RESET . ANSI_GREEN_FG . $rrdp_config['name'] . ">" . ANSI_RESET . " ");
 
 							rrdp_system__update('max_admin_connections');
@@ -2085,7 +2087,7 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 
 /*	display_version - displays the version of the RRDproxy */
 function display_version() {
-	$output = "RRDtool Proxy Server v" . RRDP_VERSION . ", " . COPYRIGHT_YEARS . "\r\n";
+	$output = RRDP_VERSION_FULL;
 	fwrite(STDOUT, $output);
 }
 
