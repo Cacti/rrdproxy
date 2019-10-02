@@ -181,6 +181,10 @@ function interact() {
 											socket_write( $ipc_socket_parent, "running\r\n");
 											break 2;
 
+										case 'version':
+											socket_write( $ipc_socket_parent, RRD_VERSION_FULL . "\r\n");
+											break 2;
+
 										case 'shutdown':
 											$shutdown_triggered = true;
 											rrdp_system__socket_write($socket_client, ( ($client_authenticated) ? encrypt(RRD_ERROR . "Shutting down ...", $client_public_key) : RRD_ERROR . "Shutting down ...") . "\r\n");

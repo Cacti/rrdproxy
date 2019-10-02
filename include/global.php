@@ -168,6 +168,7 @@ $rrdtool_custom_cmds = array(
     'rrd-list',
     'archive',
     'removespikes',
+    'version',
 );
 
 $rrdp_client_cnn_params = array(

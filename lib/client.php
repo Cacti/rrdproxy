@@ -352,6 +352,10 @@ function interact($socket_client) {
 													rrdp_system__socket_write($socket_client, encrypt( $rrdp_exec_return . "\r\n" . RRD_OK, $client_public_key) . $end_of_sequence);
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . $rrdp_exec_return . "\r\n" . RRD_OK, 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
+												case 'version':
+													rrdp_system__socket_write($socket_client, encrypt( RRDP_VERSION_FULL . "\r\n" . RRD_OK, $client_public_key) . $end_of_sequence);
+													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRDP_VERSION_FULL . "\r\n" . RRD_OK, 'IPC', SEVERITY_LEVEL_DEBUG);
+													break;
 												default:
 													break;
 											}
