@@ -1383,12 +1383,13 @@ function rrdp_cmd__shutdown($socket, $args) {
 			rrd_system__system_boolean_message('close: Service socket', true, false);
 
 			foreach ($rrdp_admin_clients as $index => $rrdp_admin_client) {
-				if ($index != $i) {
-					@socket_write($rrdp_admin_client['socket'], "Shutting down ... bye ;) \r\n");
+				if ($socket === 'SIGTERM') {
+					@socket_write($rrdp_admin_client['socket'], "SIGTERM received. Proxy server is shutting down.\r\n");
+				}elseif($index != intval($socket)) {
+					@socket_write($rrdp_admin_client['socket'], "SHUTDOWN command received by admin instance #" . intval($socket) . ". Proxy server is shutting down.\r\n");
 				}
 				@socket_close($rrdp_admin_clients['socket']);
 				rrd_system__system_boolean_message(" stop: [SOCKET:" . intval($rrdp_admin_client['socket']) . "] Service connection closed", 1, false);
-
 			}
 
 			fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
@@ -1858,10 +1859,10 @@ function rrdp_cmd__set_client($socket, $args) {
 			case 'remove' :
 				if (isset($args[0])) {
 
-					if (isset($rrdp_remote_clients[$args[0]])) {
-						unset($rrdp_remote_clients[$args[0]]);
+					if (isset($rrdp_config['remote_clients'][$args[0]])) {
+						unset($rrdp_config['remote_clients'][$args[0]]);
 						/* update local list of clients */
-						file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_remote_clients, true) . ';');
+						file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_config['remote_clients'][$args[0]], true) . ';');
 						rrdp_cmd__show($socket, array('clients') );
 					} else {
 						rrdp_system__socket_write($socket, "% Unknown client IP address\r\n");

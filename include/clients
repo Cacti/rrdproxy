@@ -1,2 +1,1 @@
-<?php $rrdp_remote_clients = array (
-);
+<?php $rrdp_remote_clients = NULL;
