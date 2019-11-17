@@ -1862,7 +1862,7 @@ function rrdp_cmd__set_client($socket, $args) {
 					if (isset($rrdp_config['remote_clients'][$args[0]])) {
 						unset($rrdp_config['remote_clients'][$args[0]]);
 						/* update local list of clients */
-						file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_config['remote_clients'][$args[0]], true) . ';');
+						file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_config['remote_clients'], true) . ';');
 						rrdp_cmd__show($socket, array('clients') );
 					} else {
 						rrdp_system__socket_write($socket, "% Unknown client IP address\r\n");
