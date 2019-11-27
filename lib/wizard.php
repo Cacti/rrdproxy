@@ -120,7 +120,7 @@ function wizard() {
 	exec("ip addr show | grep -v '::1' |  grep -v 'fe80::' | grep -Po '(inet6 \K[a-z0-9:]+)'", $network_interfaces_6);
 	$network_interfaces = $network_interfaces_4 + $network_interfaces_6;
 
-	rrd_system__system_boolean_message( 'test: network interfaces [' . sizeof($network_interfaces) . ']', $network_interfaces, true);
+	rrd_system__system_boolean_message( 'test: network interfaces [' . __sizeof($network_interfaces) . ']', $network_interfaces, true);
 
 	$system__ipv4_supported = defined('AF_INET');
 	rrd_system__system_boolean_message( 'test: ipv4 supported', $system__ipv4_supported);
@@ -544,7 +544,7 @@ function wizard() {
 			include_once('./include/clients');
 			rrd_system__system_boolean_message( 'load: Trusted Client Connections', isset($rrdp_remote_clients), true );
 
-			if (sizeof($rrdp_remote_clients) > 0) {
+			if (__sizeof($rrdp_remote_clients) > 0) {
 				wizard_handle_output( '', true, true);
 				$output = sprintf(" %-27s %-12s " . PHP_EOL, 'IP Address', 'Fingerprint');
 				foreach($rrdp_remote_clients as $ip => $fingerprint) {
@@ -572,7 +572,7 @@ function wizard() {
 		if($input == 'N') {
 			$microtime_start = microtime(true);	// reset system start time
 			rrd_system__system_boolean_message( ' save: New client configuration', file_put_contents('./include/clients', '<?php $rrdp_remote_clients = ' . var_export($rrdp_remote_clients, true) . ';'), true );
-			if(!sizeof($rrdp_remote_clients)>0) {
+			if(!__sizeof($rrdp_remote_clients)>0) {
 				$msg = ANSI_BOLD . ANSI_YELLOW_FG . '**Warning: You haven\'t defined any trusted client connection yet. External systems will not be able to connect to the proxy.' . ANSI_RESET;
 				wizard_handle_output( wordwrap($msg, 75), true, true);
 			}
@@ -614,7 +614,7 @@ function wizard() {
 			include_once('./include/proxies');
 			rrd_system__system_boolean_message( 'load: Trusted Proxy Connections', isset($rrdp_remote_proxies), true );
 
-			if (sizeof($rrdp_remote_proxies) > 0) {
+			if (__sizeof($rrdp_remote_proxies) > 0) {
 				wizard_handle_output( '', true, true);
 				$output = sprintf(" %-27s %-12s %-12s" . PHP_EOL, 'IP Address', 'Port', 'Fingerprint');
 				foreach($rrdp_remote_proxies as $ip => $params) {
@@ -685,7 +685,7 @@ function wizard_verify_rrdtool($path) {
 	} else {
 		$out_array = array();
 		exec( escapeshellcmd($path) . ' 2>/dev/null', $out_array);
-		if (sizeof($out_array) > 0) {
+		if (__sizeof($out_array) > 0) {
 			if(strpos($out_array[0], 'RRDtool') !== 0) {
 				$msg = "Invalid output.";
 			} else {
