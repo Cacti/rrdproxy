@@ -184,13 +184,13 @@ function interact($socket_client) {
 												rrdp_system__count('queries_rrdtool_valid');
 
 												/* update local cache by valid RRDtool commands for MSR */
-												if( sizeof($rrdp_config['remote_proxies'])>0 && in_array($cmd , $rrdtool_msr_cmds) === true) {
+												if(__sizeof($rrdp_config['remote_proxies'])>0 && in_array($cmd , $rrdtool_msr_cmds) === true) {
 													__logging(LOGGING_LOCATION_BUFFERED, 'MSR: ' . $cmd . ' ' . $cmd_options , 'MSR', SEVERITY_LEVEL_DEBUG);
 													list($mtime,$time) = explode(' ',microtime());
 													$offset = $time %10;
 													$block = $time - $offset + 10;
 													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . intval($read_socket)] = $cmd . ' ' . $cmd_options;
-													if(sizeof($rrdp_status['msr_commands'])>1 | $time >= $block)  {
+													if(__sizeof($rrdp_status['msr_commands'])>1 | $time >= $block)  {
 														$msr_block = key($rrdp_status['msr_commands']);
 														$msr_message['type'] = 'msr';
 														$msr_message['msr_commands'][$msr_block] = $rrdp_status['msr_commands'][$msr_block];
@@ -224,7 +224,7 @@ function interact($socket_client) {
 
 											switch ($cmd) {
 												case 'setenv':
-													if(sizeof($options) >= 2 && in_array($options[0], $rrdtool_env_vars)) {
+													if(__sizeof($options) >= 2 && in_array($options[0], $rrdtool_env_vars)) {
 														$enviro_var = array_shift($options);
 														putenv("'". $enviro_var. "'='" . str_replace("'", '', implode(' ', $options)) . "'");
 														rrdp_system__socket_write($socket_client, encrypt(RRD_OK, $client_public_key) . $end_of_sequence);
@@ -236,7 +236,7 @@ function interact($socket_client) {
 													break;
 
 												case 'getenv':
-													if(sizeof($options)== 1 && in_array($options[0], $rrdtool_env_vars)) {
+													if(__sizeof($options)== 1 && in_array($options[0], $rrdtool_env_vars)) {
 														$output = getenv($options[0]);
 														rrdp_system__socket_write($socket_client, encrypt($output . "\n" . RRD_OK, $client_public_key) . $end_of_sequence);
 														__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . $output . "\n" . RRD_OK, 'IPC', SEVERITY_LEVEL_DEBUG);
@@ -247,7 +247,7 @@ function interact($socket_client) {
 													break;
 
 												case 'setcnn':
-													if(sizeof($options) == 2 && in_array($options[0], $rrdp_client_cnn_params)) {
+													if(__sizeof($options) == 2 && in_array($options[0], $rrdp_client_cnn_params)) {
 														if($options[0] == 'timeout') {
 															if( in_array($options[1], array('null', 'off', 'disabled', '-1')) ) {
 																$tv_sec = null;
@@ -323,7 +323,7 @@ function interact($socket_client) {
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR, 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'archive':
-													if(sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0]) && $rrdp_config['path_rra_archive']) {
+													if(__sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0]) && $rrdp_config['path_rra_archive']) {
 														$source_file = $options[0];
 														$target_dir  = $rrdp_config['path_rra_archive'] . '/' . ltrim(dirname($source_file), './');
 														$target_file = $rrdp_config['path_rra_archive'] . '/' . $source_file;
@@ -338,7 +338,7 @@ function interact($socket_client) {
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . $rrdp_exec_status ? RRD_OK : RRD_ERROR, 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'unlink':
-													if(sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0])) {
+													if(__sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0])) {
 														$rrdp_exec_status = call_user_func_array($cmd, $options);
 													}else {
 														$rrdp_exec_status = false;
@@ -367,7 +367,7 @@ function interact($socket_client) {
 													$offset = $time %10;
 													$block = $time - $offset + 10;
 													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . intval($read_socket)] = $cmd . ' ' . $cmd_options;
-													if(sizeof($rrdp_status['msr_commands'])>1 | $time >= $block )  {
+													if(__sizeof($rrdp_status['msr_commands'])>1 | $time >= $block )  {
 														$msr_block = key($rrdp_status['msr_commands']);
 														$msr_message['type'] = 'msr';
 														$msr_message['msr_commands'][$msr_block] = $rrdp_status['msr_commands'][$msr_block];
