@@ -39,7 +39,7 @@ $microtime_start	= microtime(true);
 $wizard 			= false;
 $force 				= false;
 
-if (sizeof($parms) != 0) {
+if (__sizeof($parms) != 0) {
 	foreach ($parms as $parameter) {
 		@list($arg, $value) = @explode("=", $parameter);
 
@@ -344,7 +344,7 @@ while ($__server_listening) {
 		foreach ($read as $read_socket_index => $read_socket) {
 			if ($read_socket == $rrdp_client) {
 				/* a default client is trying to connect */
-				if ($rrdp_config['max_cnn'] > sizeof($rrdp_clients)) {
+				if ($rrdp_config['max_cnn'] > __sizeof($rrdp_clients)) {
 					$socket_descriptor = socket_accept($read_socket);
 					socket_getpeername($socket_descriptor, $ip);
 					/* verify authorization */
@@ -380,7 +380,7 @@ while ($__server_listening) {
 			} else if ($read_socket == $rrdp_admin) {
 
 				/* check if this is a new service client is trying to connect */
-				if ($rrdp_config['max_admin_cnn'] > sizeof($rrdp_admin_clients)) {
+				if ($rrdp_config['max_admin_cnn'] > __sizeof($rrdp_admin_clients)) {
 
 					$socket_descriptor = socket_accept($read_socket);
 
@@ -646,8 +646,8 @@ function rrdp_msr__block_write() {
 	$current_time = time();
 	$current_timeframe = $current_time + $current_time % 10;
 
-	if (sizeof($rrdp_config['remote_proxies']) > 0) {
-		if (sizeof($rrdp_msr_buffer) > 0) {
+	if (__sizeof($rrdp_config['remote_proxies']) > 0) {
+		if (__sizeof($rrdp_msr_buffer) > 0) {
 			foreach ($rrdp_msr_buffer as $timeframe => $msr_commands) {
 				if ($timeframe < $current_timeframe) {
 
@@ -695,7 +695,7 @@ function rrdp_system__check() {
 
 			$rra_disk_status = shell_exec("df --block-size=1048576 " . $rrdp_config['path_rra'] . " | sed 1d | awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'");
 			$disk_states = explode(' ', $rra_disk_status);
-			if (is_array($disk_states) && sizeof($disk_states) > 0) {
+			if (is_array($disk_states) && __sizeof($disk_states) > 0) {
 				foreach ($disk_states as $disk_state) {
 					list($type, $value) = explode(':', $disk_state);
 					if (isset($rrdp_status['rra_disk_' . $type])) {
@@ -722,7 +722,7 @@ function rrdp_system__check() {
 		/* Status - Filesystem MSR */
 		$msr_disk_status = shell_exec("df --block-size=1048576 ./msr | sed 1d | awk '{printf \"size:\" $2 \" used:\" $3 \" avail:\" $4}'");
 		$disk_states = explode(' ', $msr_disk_status);
-		if (is_array($disk_states) && sizeof($disk_states) > 0) {
+		if (is_array($disk_states) && __sizeof($disk_states) > 0) {
 			foreach ($disk_states as $disk_state) {
 				list($type, $value) = explode(':', $disk_state);
 				if (isset($rrdp_status['msr_disk_' . $type])) {
@@ -933,13 +933,13 @@ function rrdp_system__update($variable) {
 	global $rrdp_admin_clients, $rrdp_clients, $rrdp_status;
 	switch($variable) {
 		case 'max_admin_connections' :
-			if (sizeof($rrdp_admin_clients) > $rrdp_status[$variable]) {
-				$rrdp_status[$variable] = sizeof($rrdp_admin_clients);
+			if (__sizeof($rrdp_admin_clients) > $rrdp_status[$variable]) {
+				$rrdp_status[$variable] = __sizeof($rrdp_admin_clients);
 			}
 			break;
 		case 'max_client_connections' :
-			if (sizeof($rrdp_clients) > $rrdp_status[$variable]) {
-				$rrdp_status[$variable] = sizeof($rrdp_clients);
+			if (__sizeof($rrdp_clients) > $rrdp_status[$variable]) {
+				$rrdp_status[$variable] = __sizeof($rrdp_clients);
 			}
 			break;
 	}
@@ -1001,7 +1001,7 @@ function rrdp_system__status_live($variable) {
 	$status = 'n/a';
 	switch($variable) {
 		case 'threads_connected' :
-			$status = sizeof($rrdp_admin_clients);
+			$status = __sizeof($rrdp_admin_clients);
 			break;
 		case 'uptime' :
 			$status = microtime(true) - $rrdp_config['start'];
@@ -1013,7 +1013,7 @@ function rrdp_system__status_live($variable) {
 			$status = memory_get_peak_usage();
 			break;
 		case 'connections_open' :
-			$status = sizeof($rrdp_ipc_sockets);
+			$status = __sizeof($rrdp_ipc_sockets);
 			break;
 	}
 	return $status;
@@ -1054,7 +1054,7 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 					$rrdp_buffers['logging_buffered'] = array();
 				}
 
-				if (count($rrdp_buffers['logging_buffered']) == $rrdp_config['logging_size_buffered']) {
+				if (__count($rrdp_buffers['logging_buffered']) == $rrdp_config['logging_size_buffered']) {
 					$drop = array_shift($rrdp_buffers['logging_buffered']);
 					unset($drop);
 				}
@@ -1064,7 +1064,7 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 					$rrdp_buffers['logging_snmp'] = array();
 				}
 
-				if (count($rrdp_buffers['logging_snmp']) == $rrdp_config['logging_size_snmp']) {
+				if (__count($rrdp_buffers['logging_snmp']) == $rrdp_config['logging_size_snmp']) {
 					$drop = array_shift($rrdp_buffers['logging_snmp']);
 					unset($drop);
 				}
@@ -1072,7 +1072,7 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 			}
 		}
 
-		if ( is_array($rrdp_admin_clients) && count($rrdp_admin_clients)>0 && $rrdp_config['logging_severity_console']>0) {
+		if (__count($rrdp_admin_clients)>0 && $rrdp_config['logging_severity_console']>0) {
 			foreach ($rrdp_admin_clients as $key => $rrdp_admin_client) {
 				#if ( $rrdp_admin_clients[$key]['logging_severity_console'] && $severity <= $rrdp_admin_clients[$key]['logging_severity_console'] ) {
 				#	if($rrdp_admin_clients[$key]['logging_category_console'] == 'all' || stripos($rrdp_admin_clients[$key]['logging_category_console'], $category) !== false) {
@@ -1092,7 +1092,7 @@ function rrdp_system__filter($output, $args) {
 
 	$return = "% Unrecognized arguments: '" . implode(' ', $args) . "'\r\n";
 
-	if(is_array($args) && count($args) >= 3 && $args[0] == '|' && in_array($args[1], array('i','e','b', 'I', 'E', 'B', 'exp') ) ) {
+	if(__count($args) >= 3 && $args[0] == '|' && in_array($args[1], array('i','e','b', 'I', 'E', 'B', 'exp') ) ) {
 
 		$args[2] = trim(implode(' ', array_slice($args, 2)), '"\'');
 		$output_rows = explode("\r\n", $output);
@@ -1163,7 +1163,7 @@ function rrdp_system__global_console_logging_update() {
 				break;
 			}else {
 				$categories = explode(',', $rrdp_admin_clients_settings['logging_category_console']);
-				if(is_array($categories) && count($categories)>0) {
+				if(__count($categories)>0) {
 					foreach($categories as $category) {
 						$selected_categories[$category] = $category;
 					}
@@ -1172,8 +1172,8 @@ function rrdp_system__global_console_logging_update() {
 		}
 	}
 
-	if(is_array($selected_categories) && count($selected_categories)>0) {
-		if(count($selected_categories)>1 && in_array('none', $selected_categories)) {
+	if(__count($selected_categories)>0) {
+		if(__count($selected_categories)>1 && in_array('none', $selected_categories)) {
 			unset($selected_categories['none']);
 		}
 		$logging_category_console = implode(',', $selected_categories);
@@ -1517,7 +1517,7 @@ function rrdp_cmd__show_logging($arg) {
 	if ($arg) {
 		switch($arg) {
 			case 'status' :
-				if (sizeof($rrdp_msr_buffer) > 0) {
+				if (__sizeof($rrdp_msr_buffer) > 0) {
 					foreach ($rrdp_msr_buffer as $timeframe => $msr_commands) {
 						$output .= "$timeframe:\r\n";
 						foreach ($msr_commands as $timestamp => $msr_command) {
@@ -1531,7 +1531,7 @@ function rrdp_cmd__show_logging($arg) {
 				break;
 			case 'buffered' :
 			case 'snmp' :
-				if (sizeof($rrdp_buffers['logging_' . $arg]) > 0) {
+				if (__sizeof($rrdp_buffers['logging_' . $arg]) > 0) {
 					foreach ($rrdp_buffers['logging_' . $arg] as $index => $row) {
 						//rrdp_system__socket_write($socket, "row\r\n");
 						$output .= $row . "\r\n";
@@ -1558,7 +1558,7 @@ function rrdp_cmd__show_msr($arg) {
 	if (isset($arg)) {
 		switch($arg) {
 			case 'buffer' :
-				if (sizeof($rrdp_msr_buffer) > 0) {
+				if (__sizeof($rrdp_msr_buffer) > 0) {
 					foreach ($rrdp_msr_buffer as $timeframe => $msr_commands) {
 						$output .= "$timeframe:\r\n";
 						foreach ($msr_commands as $timestamp => $msr_command) {
@@ -1607,7 +1607,7 @@ function rrdp_cmd__show_version() {
 		. "\r\n" . "              |_ replication master ($rrdp_repl_master_pid)"
 		. "\r\n" . "              |_ replication slave  ($rrdp_repl_slave_pid)"
 		. "\r\n"
-		. "\r\n" . " Session usage (" . sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")"
+		. "\r\n" . " Session usage (" . __sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")"
 		. "\r\n"
 		. "\r\n" . " Server IP [" . gethostbyname(php_uname('n')) . "]"
 		. "\r\n" . " Administration: [" . "localhost \t:" . $rrdp_config['port_admin'] . ']'
@@ -1621,7 +1621,7 @@ function rrdp_cmd__show_version() {
 function rrdp_cmd__debug($socket, $args) {
 	global $rrdp_replicator_pid, $rrdp_admin_clients, $rrdp_help_messages, $rrdp_config, $rrdp_clients, $rrdp_ipc_sockets;
 
-	if (sizeof($args) == 2) {
+	if (__sizeof($args) == 2) {
 		$i = intval($socket);
 		if (isset($rrdp_help_messages['debug']['?'][intval($rrdp_admin_clients[$i]['privileged'])][$args[0]])) {
 			$process = $args[0];
@@ -1706,7 +1706,7 @@ function rrdp_cmd__set_cluster($socket, $args) {
 	if ( !is_null($arg) ) {
 		switch($arg) {
 			case 'add' :
-				if (sizeof($args) == 3) {
+				if (__sizeof($args) == 3) {
 
 					/* Verify IP address */
 					if (filter_var($args[0], FILTER_VALIDATE_IP) === false) {
@@ -1949,7 +1949,7 @@ function rrdp_cmd__set_logging($socket, $args) {
 				}elseif($argument == 'category') {
 					$categories = explode(',', array_shift($args));
 
-					if(is_array($categories) && count($categories)>0) {
+					if(__count($categories)>0) {
 						$selected_categories = array();
 						foreach($categories as $category) {
 							if ($category == 'none') {
