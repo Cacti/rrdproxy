@@ -196,6 +196,13 @@ function __logging($location, $msg, $category, $severity) {
     return;
 }
 
+function __sizeof($array) {
+	return ($array === false || !is_array($array)) ? 0 : sizeof($array);
+}
+function __count($array) {
+	return ($array === false || !is_array($array)) ? 0 : count($array);
+}
+
 function __errorHandler($code, $text, $file, $line) {
 
     if (!(error_reporting() & $code)) {
