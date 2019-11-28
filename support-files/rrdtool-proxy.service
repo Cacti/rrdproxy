@@ -1,0 +1,19 @@
+[Unit]
+Description=Cacti RRD Proxxy service
+After=network.target
+
+[Service]
+Type=forking
+Restart=always
+RestartSec=1
+User=cacti
+
+WorkingDirectory=/home/cacti/cacti/devtool/rrdproxy/
+
+TimeoutStartSec=10
+TimeoutStopSec=30
+ExecStart=/usr/bin/env php ./rrdtool-proxy.php -s
+PIDFile=/home/cacti/cacti/devtool/rrdproxy/run/rrdtool-proxy.pid
+
+[Install]
+WantedBy=multi-user.target

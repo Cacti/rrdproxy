@@ -36,6 +36,7 @@ $parms = $_SERVER["argv"];
 array_shift($parms);
 
 $microtime_start	= microtime(true);
+$systemd			= false;
 $wizard 			= false;
 $force 				= false;
 
@@ -44,24 +45,28 @@ if (__sizeof($parms) != 0) {
 		@list($arg, $value) = @explode("=", $parameter);
 
 		switch ($arg) {
-			case "-w" :
-			case "--wizard" :
+			case '-s' :
+			case '-systemd' :
+				$systemd = true;
+				break;
+			case '-w' :
+			case '--wizard' :
 				$wizard = true;
 				break;
-			case "--force" :
-			case "-f" :
+			case '--force' :
+			case '-f' :
 				$force = true;
 				break;
-			case "-v" :
-			case "--version" :
+			case '-v' :
+			case '--version' :
 				display_version();
 				exit;
-			case "-h" :
-			case "--help" :
+			case '-h' :
+			case '--help' :
 				display_help();
 				exit ;
 			default :
-				print "ERROR: Invalid Parameter " . $parameter . "\n\n";
+				print 'ERROR: Invalid Parameter ' . $parameter . "\n\n";
 				display_help();
 				exit ;
 		}
@@ -70,24 +75,31 @@ if (__sizeof($parms) != 0) {
 
 /* ---------------------------- SYSTEM SETUP ROUTINE -------------------------------------- */
 
-if ( !file_exists('./include/config') || $wizard === true ) {
-	/* unconfigured system */
-	init_wizard();
-
+if ( !file_exists('./include/config') ) {
+	if( $wizard === true ) {
+		/* unconfigured system */
+		init_wizard();
+	}elseif ( $systemd === true ) {
+		rrd_system__system_die('Configuration file missing. Please run "rrdtool-proxy.php -w" to start the proxy wizard.');
+	}
 } else {
-
 	include_once ('./include/config');
 	if( empty($rrdp_config) || !array_key_exists('version', $rrdp_config) || version_compare($rrdp_config['version'], RRDP_VERSION, '<')) {
 		/* invalid configuration or version upgrade */
+		if( $systemd === true ) {
+			rrd_system__system_die('Proxy has not been configured properly. Please re-run "rrdtool-proxy.php -w" to start the proxy wizard.');
+		}
 		init_wizard();
 	}
 
 	/* regular system start */
 	define('SYSTEM_LOGGING', TRUE);
-	rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Initiate system startup', 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
-	fwrite(STDOUT, "\e[8;50;80t");
-	fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG);
-	fwrite(STDOUT, "   RRDtool Proxy Server Startup                                                 " . ANSI_RESET . "\r\n");
+	if($systemd === false) {
+		rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Initiate system startup', 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
+		fwrite(STDOUT, "\e[8;50;80t");
+		fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG);
+		fwrite(STDOUT, "   RRDtool Proxy Server Startup                                                 " . ANSI_RESET . "\r\n");
+	}
 
 	/* No Windows, please ;) */
 	$support_os = strstr(PHP_OS, "WIN") ? false : true;
@@ -287,13 +299,16 @@ if ($max_open_files[0] == 'unlimited')
 	$max_open_files[0] = 1048576;
 $rrdp_config['max_cnn'] = intval(($max_open_files[0] - $open_files[0]) / 2 - $rrdp_config['max_admin_cnn'] * 2 - 100); #use a buffer of 100 open files
 
-/* return version info to give admins a summary of our setup */
-fwrite(STDOUT, "\r\n");
-fwrite(STDOUT, rrdp_cmd__show_version() . "\r\n");
-fwrite(STDOUT, '________________________________________________________________________________' . "\r\n");
+/* return system info */
+fwrite(STDOUT, rrdp_cmd__show_version($systemd) . "\r\n");
+
 /* signal the parent to exit - now we are up and ready */
 @posix_kill($ppid, SIGUSR1);
 
+/* create PID file for systemd */
+if($systemd) {
+	file_put_contents('./run/rrdtool-proxy.pid', posix_getpid());
+}
 /* ---------------------------- END - SYSTEM STARTUP ROUTINE ---------------------------- */
 
 while ($__server_listening) {
@@ -855,7 +870,7 @@ function rrd_system__system_die($msg = '') {
 }
 
 function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false, $skip = false) {
-	global $colors, $microtime_start;
+	global $colors, $microtime_start, $systemd;
 
 	$microtime_end = microtime(true);
 	$color = $skip ? $colors['warning'] : ($boolean_state ? $colors['normal'] : (($exit == true) ? $colors['error'] : $colors['warning']));
@@ -866,10 +881,15 @@ function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false,
 	if (strlen($msg) > $max_msg_length)
 		$msg = substr($msg, 0, $max_msg_length - 3) . '...';
 
-	fwrite(STDOUT, sprintf("\r\n[%.5f] %-{$max_msg_length}s " . ANSI_RESET . "{$color}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg, $status));
+	if($systemd === false) {
+		fwrite(STDOUT, sprintf("\r\n[%.5f] %-{$max_msg_length}s " . ANSI_RESET . "{$color}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg, $status));
+	}
 
 	if ($skip == false && $boolean_state == false && $exit == true ) {
 		rrdp_system__logging(LOGGING_LOCATION_BUFFERED, $msg, 'SYS', SEVERITY_LEVEL_CRITICAL);
+		if($systemd === true) {
+			fwrite(STDOUT, sprintf("\r\n[%.5f] %-{$max_msg_length}s " . ANSI_RESET . "{$color}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg, $status));
+		}
 		rrd_system__system_die("\r\n");
 	}else {
 		rrdp_system__logging(LOGGING_LOCATION_BUFFERED, $status . ' ' . $msg, 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
@@ -1323,14 +1343,16 @@ function rrdp_cmd__quit($socket, $args) {
 }
 
 function rrdp_cmd__shutdown($socket, $args) {
-	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdcached_pid, $microtime_start, $rrdp_process_types;
+	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdcached_pid, $microtime_start, $rrdp_process_types, $systemd;
 
 	if (!$args) {
 		if ($socket === 'SIGTERM' || (isset($rrdp_admin_clients[intval($socket)]) && $rrdp_admin_clients[intval($socket)]['privileged'] === true)) {
 
 			$microtime_start = microtime(true);
 
-			fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Shutdown                                                 " . ANSI_RESET . "\r\n");
+			if($systemd === false) {
+				fwrite(STDOUT, ANSI_ERASE_SCREEN . ANSI_POS_TOP_LEFT . ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . "   RRDtool Proxy Server Shutdown                                                 " . ANSI_RESET . "\r\n");
+			}
 
 			/* stop accepting client updates */
 			socket_close($rrdp_client);
@@ -1392,7 +1414,9 @@ function rrdp_cmd__shutdown($socket, $args) {
 				rrd_system__system_boolean_message(" stop: [SOCKET:" . intval($rrdp_admin_client['socket']) . "] Service connection closed", 1, false);
 			}
 
-			fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
+			if ($systemd === false) {
+				fwrite(STDOUT, "\r\n" . rrdp_get_cacti_proxy_logo() . "\r\n\r\n" . '  Bye! :)' . "\r\n" . "\r\n" . '________________________________________________________________________________' . "\r\n");
+			}
 			exit ;
 		}
 	}
@@ -1584,9 +1608,10 @@ function rrdp_cmd__show_msr($arg) {
 	return $output;
 }
 
-function rrdp_cmd__show_version() {
+function rrdp_cmd__show_version($systemd = false) {
 	global $rrdp_config, $rrdp_clients, $rrdp_repl_master_pid, $rrdp_repl_slave_pid;
 
+	$output = '';
 	$runtime = microtime(true) - $rrdp_config['start'];
 	$days = floor($runtime / 86400);
 	$hours = floor(($runtime - $days * 86400) / 3600);
@@ -1597,23 +1622,32 @@ function rrdp_cmd__show_version() {
 	$memory_used = memory_get_usage();
 	$memory_usage = round(($memory_used / $memory_limit) * 100, 8);
 
-	$output = rrdp_get_cacti_proxy_logo()
-		. "\r\n" . " RRDtool Proxy Server v" . RRDP_VERSION
-		. "\r\n" . " " . COPYRIGHT_YEARS
-		. "\r\n" . " {$rrdp_config['name']} uptime is $days days, $hours hours, $minutes minutes, $seconds seconds"
-		. "\r\n" . " Memory usage " . $memory_usage . " % (" . $memory_used . " of " . $memory_limit . " bytes)"
-		. "\r\n" . " " . $rrdp_config['encryption']['public_key_fingerprint']
-		. "\r\n" . " Processes: rrdp (" . posix_getpid() . ")"
-		. "\r\n" . "              |_ replication master ($rrdp_repl_master_pid)"
-		. "\r\n" . "              |_ replication slave  ($rrdp_repl_slave_pid)"
-		. "\r\n"
-		. "\r\n" . " Session usage (" . __sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")"
-		. "\r\n"
-		. "\r\n" . " Server IP [" . gethostbyname(php_uname('n')) . "]"
-		. "\r\n" . " Administration: [" . "localhost \t:" . $rrdp_config['port_admin'] . ']'
-		. "\r\n" . " Replication:    [" . (($rrdp_config['address'] != '0.0.0.0' & $rrdp_config['address'] != '::') ? $rrdp_config['address'] : 'any') . "\t:" . $rrdp_config['port_server'] . ']'
-		. "\r\n" . " Clients:        [" . (($rrdp_config['address'] != '0.0.0.0' & $rrdp_config['address'] != '::') ? $rrdp_config['address'] : 'any') . "\t:" . $rrdp_config['port_client'] . ']'
-		. "\r\n";
+	$rrdp_address = (($rrdp_config['address'] != '0.0.0.0' & $rrdp_config['address'] != '::') ? $rrdp_config['address'] : 'any');
+
+	$sockets = " Open Sockets: "
+		. "\r\n" . sprintf(" Administration: [ %-20s :%-5s ]", 'localhost', $rrdp_config['port_admin'])
+		. "\r\n" . sprintf(" Replication:    [ %-20s :%-5s ]", $rrdp_address, $rrdp_config['port_server'])
+		. "\r\n" . sprintf(" Clients:        [ %-20s :%-5s ]", $rrdp_address, $rrdp_config['port_client']);
+
+	if($systemd === false ) {
+		$output = rrdp_get_cacti_proxy_logo()
+			. "\r\n" . " RRDtool Proxy Server v" . RRDP_VERSION
+			. "\r\n" . " " . COPYRIGHT_YEARS
+			. "\r\n" . " {$rrdp_config['name']} uptime is $days days, $hours hours, $minutes minutes, $seconds seconds"
+			. "\r\n" . " Server IP " . gethostbyname(php_uname('n'))
+			. "\r\n" . " Memory usage " . $memory_usage . " % (" . $memory_used . " of " . $memory_limit . " bytes)"
+			. "\r\n" . " Fingerprint " . $rrdp_config['encryption']['public_key_fingerprint']
+			. "\r\n" . " Processes: rrdp (" . posix_getpid() . ")"
+			. "\r\n" . "              |_ replication master ($rrdp_repl_master_pid)"
+			. "\r\n" . "              |_ replication slave  ($rrdp_repl_slave_pid)"
+			. "\r\n"
+			. "\r\n" . " Session usage (" . __sizeof($rrdp_clients) . '/' . $rrdp_config['max_cnn'] . ")"
+			. "\r\n"
+			. "\r\n" . $sockets
+			. "\r\n";
+	} else {
+		$output = $sockets;
+	}
 
 	return $output;
 }
@@ -2095,12 +2129,13 @@ function display_version() {
 /*	display_help - displays the usage of the RRDproxy */
 function display_help() {
 	display_version();
-	$output = "\r\n" . "Usage: rrdtool-proxy.php [-w|--wizard] [-v|--version] [-h|--help] [-f|--force]\r\n"
+	$output = "\r\n" . "Usage: rrdtool-proxy.php [-w|--wizard] [-v|--version] [-h|--help] [-f|--force] [-s|--systemd]\r\n"
 		. "\r\n" . "Optional:"
 		. "\r\n" . "    -v --version   - Display the version of RRDtool Proxy Server"
 		. "\r\n" . "    -h --help      - Display this help"
 		. "\r\n" . "    -w --wizard    - Start Configuration Wizard"
 		. "\r\n" . "    -f --force     - Allow multiple proxy instances running on a single server"
+		. "\r\n" . "    -s --systemd   - Adjust output messages for systemd"
 		. "\r\n" . "\r\n";
 	fwrite(STDOUT, $output);
 }
@@ -2128,7 +2163,8 @@ function rrdp_sig_handler($signo) {
 }
 
 function rrdp_get_cacti_proxy_logo() {
-	return	           "# " . ANSI_BOLD . ANSI_GREEN_FG . "    ___           _   _  " . ANSI_RESET . "   __    __    ___     ___                     "
+	return
+		  "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "    ___           _   _  " . ANSI_RESET . "   __    __    ___     ___                     "
 		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "   / __\__ _  ___| |_(_) " . ANSI_RESET . "  /__\  /__\  /   \   / _ \_ __ _____  ___   _ "
 		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . "  / /  / _` |/ __| __| | " . ANSI_RESET . " / \// / \// / /\ /  / /_)/ '__/ _ \ \/ / | | |"
 		. "\r\n" . "# " . ANSI_BOLD . ANSI_GREEN_FG . " / /__| (_| | (__| |_| | " . ANSI_RESET . "/ _  \/ _  \/ /_//  / ___/| | | (_) >  <| |_| |"
