@@ -268,6 +268,9 @@ function wizard() {
 
 	/* neither a final nor a temporary system configuration file have been found */
 	if(isset($old_config)) {
+		if(array_key_exists('version', $old_config)) {
+			unset($old_config['version']);
+		}
 		foreach($old_config as $index => $value) {
 			if (isset($active_config[$index])) {
 				$active_config[$index] = $value;

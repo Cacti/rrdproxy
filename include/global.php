@@ -25,7 +25,7 @@
 define('COPYRIGHT_YEARS', 'Copyright (C) 2004-' . date('Y') . ' The Cacti Group');
 define('COPYRIGHT_YEARS_SHORT', '(c) 2004-' . date('Y') . ' - The Cacti Group');
 
-define('RRDP_VERSION', '1.2.7');
+define('RRDP_VERSION', '1.2.8');
 define('RRDP_VERSION_FULL', 'RRDtool Proxy Server v' . RRDP_VERSION . ', ' . COPYRIGHT_YEARS . "\r\n");
 
 define('RRD_OK', 'OK u:0.00');
