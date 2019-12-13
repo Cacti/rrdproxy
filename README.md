@@ -9,7 +9,7 @@ allows system administrators to split Cacti's access resources across machines
 without the need for NFS.
 
 Due the fact that updates to files may contain sensitive data and to prevent
-undesired updates, RRDtool proxy utilitizes high encrypted connections (RSA2048
+undesired updates, RRDtool proxy utilizes high encrypted connections (RSA2048
 and AES192) with continuously changing keys.  This ensures a secured connection
 between the proxy and registered clients and/or other proxies.
 
@@ -49,7 +49,7 @@ higher).
 
 ### Recommended Requirements
 
-All minimum requirements must be met, though the following are more optinal:
+All minimum requirements must be met, though the following are more optional:
 
 - PHP Version 7.3 or higher
   Include all minimum recommendation modules
@@ -98,7 +98,7 @@ Green | Success and without issue
 Yellow | Warnings and will be ignored, correct the problem if needed
 Red | Errors and will not be ignored, may prevent continuation
 
-When the wziard prompts for the various settings that are available, you can
+When the wizard prompts for the various settings that are available, you can
 accept the default value simply by pressing return to accept it. Below are a few
 of these settings and the default values that can be accepted:
 
@@ -199,5 +199,5 @@ rrdp#
 - International language support
 
   Currently, the RRDproxy wizard and command line interface port are both
-  offering only english as the default langauge.
+  offering only english as the default language.
 
