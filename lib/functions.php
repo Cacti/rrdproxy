@@ -22,6 +22,10 @@
  +-------------------------------------------------------------------------+
 */
 
+use phpseclib\Crypt\Random;
+use phpseclib\Crypt\Rijndael;
+use phpseclib\Crypt\RSA;
+
 function rrdtool_pipe_init($rrdp_config) {
 
     $fds = array(
@@ -47,7 +51,6 @@ function rrdtool_pipe_close($process) {
 
 function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $compression, $silent_mode = false, $terminator = "_EOT_\r\n") {
 
-    $stdout = '';
     $return_code = fwrite($pipes[0], $command);
 
     if($return_code === false) {
@@ -67,8 +70,6 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
             $buffer .= $stdout;
         }
 
-
-
         if ( substr_count($buffer, "OK u") ) {
 
             $buffer = trim($buffer);
@@ -85,13 +86,11 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 
                     $buffer_length_new = strlen($buffer);
                     rrdp_system__socket_write( $socket, encrypt( $buffer, $client_public_key) . $terminator); $packets++;
-#__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE 1: ' . $terminator, 'IPC', SEVERITY_LEVEL_DEBUG);
                     __logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRD_OK . ', payload: ' . $buffer_length_new . ' Bytes, compression: on , ratio: ' . round(($buffer_length/$buffer_length_new),2) . ' , packets: ' . $packets, 'IPC', SEVERITY_LEVEL_DEBUG);
                 }else {
                     if(is_resource($socket) === true) {
                         $buffer_length = strlen($buffer);
                         rrdp_system__socket_write( $socket, encrypt( $buffer, $client_public_key) . $terminator); $packets++;
-#__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE 2: ' . $terminator, 'IPC', SEVERITY_LEVEL_DEBUG);
                         __logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRD_OK . ', payload: ' . $buffer_length . ' Bytes, compression: off' . ' , packets: ' . $packets, 'IPC', SEVERITY_LEVEL_DEBUG);
                     }else {
                         return $buffer;
@@ -137,17 +136,17 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
                 $buffer = '';
             }
         }
-
     }
+    return null;
 }
 
 function encrypt($output, $rsa_key) {
     global $encryption;
 
     if($encryption) {
-        $rsa = new \phpseclib\Crypt\RSA();
-        $aes = new \phpseclib\Crypt\Rijndael();
-        $aes_key = \phpseclib\Crypt\Random::string(192);
+        $rsa = new RSA();
+        $aes = new Rijndael();
+        $aes_key = Random::string(192);
 
         $aes->setKey($aes_key);
         $ciphertext = base64_encode($aes->encrypt($output));
@@ -165,8 +164,8 @@ function decrypt($input){
     global $rrdp_config, $encryption;
 
     if($encryption) {
-        $rsa = new \phpseclib\Crypt\RSA();
-        $aes = new \phpseclib\Crypt\Rijndael();
+        $rsa = new RSA();
+        $aes = new Rijndael();
 
         $aes_key_length = hexdec(substr($input,0,3));
         $aes_key = base64_decode(substr($input,3,$aes_key_length));
@@ -175,39 +174,35 @@ function decrypt($input){
         $rsa->loadKey($rrdp_config['encryption']['private_key']);
         $aes_key = $rsa->decrypt($aes_key);
         $aes->setKey($aes_key);
-        $plaintext = $aes->decrypt($ciphertext);
-
-        return $plaintext;
+        return $aes->decrypt($ciphertext);
     }else {
         return $input;
     }
 }
 
 function __logging($location, $msg, $category, $severity) {
-    global $rrdp_config, $ipc_socket_parent, $ipc_global_resource_id, $severity_levels, $c_pid;
+    global $rrdp_config, $ipc_socket_parent, $ipc_global_resource_id, $c_pid;
 
     if ( ($location === LOGGING_LOCATION_BUFFERED && $rrdp_config['logging_severity_buffered'] && $severity <= $rrdp_config['logging_severity_buffered'])
         || ($location === LOGGING_LOCATION_SNMP && $rrdp_config['logging_severity_snmp'] && $severity <= $rrdp_config['logging_severity_snmp'])
         || ($rrdp_config['logging_severity_console'] && $severity <= $rrdp_config['logging_severity_console'] && ( $rrdp_config['logging_category_console'] == 'all' || stripos($rrdp_config['logging_category_console'], $category) !== false) ) ) {
 
         socket_write( $ipc_socket_parent, serialize( array('type' => 'debug', 'debug' => array('msg' => '#' . $ipc_global_resource_id . ' [' . $c_pid . '] ' . $msg, 'category' => $category, 'severity' => $severity, 'location' => $location ) ) ) . "\r\n");
-        #	if($severity === SEVERITY_LEVEL_DEBUG) usleep(100000);
+        usleep(10000);
     }
     return;
 }
 
 function __sizeof($array) {
-	return ($array === false || !is_array($array)) ? 0 : sizeof($array);
+    return ($array === false || !is_array($array)) ? 0 : sizeof($array);
 }
 function __count($array) {
-	return ($array === false || !is_array($array)) ? 0 : count($array);
+    return ($array === false || !is_array($array)) ? 0 : count($array);
 }
 
 function __errorHandler($code, $text, $file, $line) {
 
-    if (!(error_reporting() & $code)) {
-        return;
-    }
+    if (!($code & error_reporting())) return null;
 
     switch ($code) {
         case E_USER_ERROR:
@@ -237,21 +232,21 @@ function __sig_handler($signo) {
         case SIGTERM :
             exit ;
             break;
+        case SIGUSR1:
         case SIGHUP :
-            break;
-        case SIGUSR1 :
             break;
         default :
     }
 }
 
 function is_rrdtool_proxy_running() {
-	exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
-	return (__sizeof($output) >= 2 ) ? false : true;
+    exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
+    return (__sizeof($output) >= 2 ) ? false : true;
 }
 
 function is_rrdcached_running() {
-	exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdcached', $output);
-	return (__sizeof($output) >= 2 && !$force ) ? false : true;
+    global $force;
+    exec('ps -ef | grep -v grep | grep -v "sh -c" | grep rrdcached', $output);
+    return (__sizeof($output) >= 2 && !$force ) ? false : true;
 }
 

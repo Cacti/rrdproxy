@@ -22,6 +22,8 @@
  +-------------------------------------------------------------------------+
 */
 
+use phpseclib\Crypt\RSA;
+
 function interact($socket_client) {
 	/*
 		Clients using the default port are only allowed to talk to RRDtool directly.
@@ -51,7 +53,7 @@ function interact($socket_client) {
 	socket_set_block ($ipc_socket_parent);
 
 	/* enable message encryption */
-	$rsa = new \phpseclib\Crypt\RSA();
+	$rsa = new RSA();
 
 	$input = '';
 
@@ -176,7 +178,7 @@ function interact($socket_client) {
 												$rrdtool_pipes			= $rrdtool_process_pipes[1];
 											}
 
-											$auto_compression = (in_array($cmd, array('xport', 'fetch', 'dump', 'graph', 'graphv', 'updatev ', 'info')) && strpos($cmd_options, '--imgformat=PNG') === false) ? true : false;
+											$auto_compression = in_array($cmd, array('xport', 'fetch', 'dump', 'graph', 'graphv', 'updatev ', 'info')) && strpos($cmd_options, '--imgformat=PNG') === false;
 											$rrd_exec_status = rrdtool_pipe_execute($cmd . ' ' . $cmd_options . "\r\n", $rrdtool_pipes, $socket_client, $client_public_key, $auto_compression, false, $end_of_sequence);
 
 											if( $rrd_exec_status === true ) {
@@ -198,7 +200,8 @@ function interact($socket_client) {
 															unset($rrdp_status['msr_commands'][$msr_block]);
 															unset($msr_message);
 															$rrdp_status = $rrdp_status_backup;
-														};
+															usleep(10000);
+														}
 													}
 												}
 											}else if( $rrd_exec_status === null ) {
@@ -287,7 +290,7 @@ function interact($socket_client) {
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRD_OK, 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'rrd-list':
-													/* scan RRA folder */;
+													/* scan RRA folder */
 													clearstatcache();
 													$buffer = '';
 													$rra_path_absolute = rtrim($rrdp_config['path_rra'], '/');
@@ -306,7 +309,6 @@ function interact($socket_client) {
 													$buffer_length_new = strlen($buffer);
 													rrdp_system__socket_write( $read_socket, encrypt( $buffer, $client_public_key) . $end_of_sequence );
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRD_OK . ', payload: ' . $buffer_length_new . ' Bytes, compression: on , ratio: ' . round(($buffer_length/$buffer_length_new),2) . ' , packets: 1', 'IPC', SEVERITY_LEVEL_DEBUG);
-													$buffer = '';
 													break;
 												case 'filemtime':
 
@@ -320,10 +322,10 @@ function interact($socket_client) {
 
 													$rrdp_exec_status = call_user_func_array($cmd, $options);
 													rrdp_system__socket_write($socket_client, encrypt( ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR , $client_public_key) . $end_of_sequence);
-													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR, 'IPC', SEVERITY_LEVEL_DEBUG);
+													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'archive':
-													if(__sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0]) && $rrdp_config['path_rra_archive']) {
+													if(__sizeof($options) == 1 && (substr($options[0],-3) == 'rrd') && file_exists($options[0]) && $rrdp_config['path_rra_archive']) {
 														$source_file = $options[0];
 														$target_dir  = $rrdp_config['path_rra_archive'] . '/' . ltrim(dirname($source_file), './');
 														$target_file = $rrdp_config['path_rra_archive'] . '/' . $source_file;
@@ -334,17 +336,17 @@ function interact($socket_client) {
 													}else {
 														$rrdp_exec_status = false;
 													}
-													rrdp_system__socket_write($socket_client, encrypt( $rrdp_exec_status ? RRD_OK : RRD_ERROR , $client_public_key) . $end_of_sequence);
-													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . $rrdp_exec_status ? RRD_OK : RRD_ERROR, 'IPC', SEVERITY_LEVEL_DEBUG);
+													rrdp_system__socket_write($socket_client, encrypt( (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), $client_public_key) . $end_of_sequence);
+													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'unlink':
-													if(__sizeof($options[0]) && (substr($options[0],-3) == 'rrd') && file_exists($options[0])) {
+													if(__sizeof($options) == 1  && (substr($options[0],-3) == 'rrd') & file_exists($options[0])) {
 														$rrdp_exec_status = call_user_func_array($cmd, $options);
 													}else {
 														$rrdp_exec_status = false;
 													}
-													rrdp_system__socket_write($socket_client, encrypt( ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR , $client_public_key) . $end_of_sequence);
-													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR, 'IPC', SEVERITY_LEVEL_DEBUG);
+													rrdp_system__socket_write($socket_client, encrypt( (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), $client_public_key) . $end_of_sequence);
+													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'removespikes':
 													$cmd_options = str_replace('-R=.', '-R=' . $rrdp_config['path_rra'], $cmd_options);
@@ -375,7 +377,8 @@ function interact($socket_client) {
 															unset($rrdp_status['msr_commands'][$msr_block]);
 															unset($msr_message);
 															$rrdp_status = $rrdp_status_backup;
-														};
+															usleep(10000);
+														}
 													}
 												}
 											}
@@ -448,9 +451,3 @@ function interact($socket_client) {
 	}
 	return;
 }
-
-function custom_signal_handler($signo) {
-
-}
-
-?>

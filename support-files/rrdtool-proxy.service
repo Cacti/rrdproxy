@@ -1,5 +1,5 @@
 [Unit]
-Description=Cacti RRD Proxxy service
+Description=Cacti RRD Proxy service
 After=network.target
 
 [Service]
@@ -16,4 +16,5 @@ ExecStart=/usr/bin/env php ./rrdtool-proxy.php -s
 PIDFile=/home/cacti/cacti/devtool/rrdproxy/run/rrdtool-proxy.pid
 
 [Install]
+Alias=rrdp.service
 WantedBy=multi-user.target
