@@ -51,27 +51,27 @@ if (__sizeof($parms) != 0) {
 		@list($arg, $value) = @explode('=', $parameter);
 
 		switch ($arg) {
-			case '-s' :
-			case '-systemd' :
+			case '-s':
+			case '-systemd':
 				$systemd = true;
 				break;
-			case '-w' :
-			case '--wizard' :
+			case '-w':
+			case '--wizard':
 				$wizard = true;
 				break;
-			case '--force' :
-			case '-f' :
+			case '--force':
+			case '-f':
 				$force = true;
 				break;
-			case '-v' :
-			case '--version' :
+			case '-v':
+			case '--version':
 				display_version();
 				exit;
-			case '-h' :
-			case '--help' :
+			case '-h':
+			case '--help':
 				display_help();
 				exit ;
-			default :
+			default:
 				print 'ERROR: Invalid Parameter ' . $parameter . NL . NL;
 				display_help();
 				exit ;
@@ -2075,14 +2075,14 @@ function init_wizard() {
 /*  signal handler  */
 function rrdp_sig_handler($signo) {
 	switch ($signo) {
-		case SIGTERM :
+		case SIGTERM:
 			rrdp_cmd__shutdown('SIGTERM', false);
 			exit ;
 			break;
-		case SIGHUP :
-		case SIGUSR1 :
+		case SIGHUP:
+		case SIGUSR1:
 			break;
-		default :
+		default:
 	}
 }
 
