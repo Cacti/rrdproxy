@@ -226,7 +226,7 @@ function __errorHandler($code, $text, $file, $line) {
     return true;
 }
 
-/*  client signal handler  */
+/* signal handler for master, slave and client processes */
 function __sig_handler($signo) {
     switch ($signo) {
         case SIGTERM :

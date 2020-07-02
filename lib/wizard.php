@@ -769,7 +769,9 @@ function wizard_handle_output($msg, $new_line=false, $new_line_after=false, $cle
 }
 
 function wizard_handle_input($msg, $filter=FILTER_DEFAULT, $filter_options=false, $filter_help_msg=false, $new_line=false, $new_line_after=false, $clear_commandline_screen=false, $require_value=false) {
-	while(1!=0) {
+	$filtered_value = false;
+
+	while($filtered_value === false) {
 
 		wizard_handle_output($msg . ' ', $new_line, $new_line_after, $clear_commandline_screen);
 
@@ -819,7 +821,6 @@ function wizard_handle_title($page, $title = '') {
 		str_repeat(' ', 80 - $title_spaces) . $title_suffix . ANSI_RESET, false, true, true);
 }
 function wizard_handle_settings($inputs, &$active_config, &$attribute_count, $title = '') {
-	global $rrd_config_tmp;
 
 	if (empty($title)) {
 		$title = '';

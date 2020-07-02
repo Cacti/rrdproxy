@@ -27,7 +27,7 @@ use phpseclib\Crypt\RSA;
 function interact($socket_client) {
 	/*
 		Clients using the default port are only allowed to talk to RRDtool directly.
-		But the child will keep its parent up-to-date by using IPC.
+		By using IPC this child process will interact with the main process.
 	*/
 	global $rrdcached_pid, $rrdp_config, $ipc_socket_parent, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdtool_msr_cmds, $rrdp_status, $rrdtool_env_vars, $rrdp_client_cnn_params;
 	global $encryption;
@@ -71,7 +71,7 @@ function interact($socket_client) {
 				socket_clear_error();
 				break;
 			default:
-				__logging(LOGGING_LOCATION_BUFFERED, 'Critical error occured: ' . $err, 'IPC', SEVERITY_LEVEL_CRITICAL);
+				__logging(LOGGING_LOCATION_BUFFERED, 'Critical error occurred: ' . $err, 'IPC', SEVERITY_LEVEL_CRITICAL);
 				break 2;
 		}
 

@@ -23,6 +23,9 @@
  */
 
 /* do NOT run this script through a web browser */
+
+use phpseclib\Crypt\RSA;
+
 if (!isset($_SERVER["argv"][0]) || isset($_SERVER['REQUEST_METHOD']) || isset($_SERVER['REMOTE_ADDR'])) {
 	die("<br><strong>This script is only meant to run at the command line.</strong>");
 }
@@ -209,7 +212,7 @@ if (!$rrdp_admin) {
 @socket_set_option($rrdp_admin, SOL_SOCKET, SO_REUSEADDR, 1);
 if (!@socket_bind($rrdp_admin, (($rrdp_config['ipv6']) ? '::1' : '127.0.0.1'), $rrdp_config['port_admin'])) {
 	rrd_system__system_die("\r\n" . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_admin'] . "'" . "\r\n" . "Error: " . socket_strerror(socket_last_error()) . "\r\n");
-};
+}
 socket_set_nonblock($rrdp_admin);
 socket_listen($rrdp_admin);
 rrd_system__system_boolean_message('init: tcp admin socket', $rrdp_admin, true);
@@ -223,7 +226,7 @@ if (!$rrdp_client) {
 @socket_set_option($rrdp_client, SOL_SOCKET, SO_REUSEADDR, 1);
 if (!@socket_bind($rrdp_client, $rrdp_config['address'], $rrdp_config['port_client'])) {
 	rrd_system__system_die("\r\n" . "Unable to bind socket to '" . $rrdp_config['address'] . ":" . $rrdp_config['port_client'] . "'" . "\r\n" . "Error: " . socket_strerror(socket_last_error()) . "\r\n");
-};
+}
 socket_set_nonblock($rrdp_client);
 
 rrd_system__system_boolean_message('init: tcp client socket', $rrdp_client, true);
@@ -238,7 +241,7 @@ $rrdp_admin_sockets = array();
 $rrdp_admin_clients = array();
 $rrdp_ipc_server_sockets = array();
 
-/* start RRDCached if configued */
+/* start RRDCached if configured */
 if ($rrdp_config['path_rrdcached']) {
 
 	$current_working_directory = realpath('');
@@ -394,7 +397,7 @@ while ($__server_listening) {
 				}
 			} else if ($read_socket == $rrdp_admin) {
 
-				/* check if this is a new service client is trying to connect */
+				/* check if this is a new service client that is trying to connect */
 				if ($rrdp_config['max_admin_cnn'] > __sizeof($rrdp_admin_clients)) {
 
 					$socket_descriptor = socket_accept($read_socket);
@@ -430,9 +433,10 @@ while ($__server_listening) {
 						break;
 					}
 				} else {
-					/* 	we are out of resources - keep these clients in our backlog -
-					 !!! Vulnerability !!! How to avoid a denial of service?
-					 */
+					rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Critical: Maximum number of admin connections has been exhausted. Check system setup ("ulimit -n")!', 'SYS', SEVERITY_LEVEL_ALERT);
+					$socket_descriptor = socket_accept($read_socket);
+					@socket_write($socket_descriptor, "ERROR: Maximum number of service connections has been exceeded.\r\n");
+					@socket_close($socket_descriptor);
 				}
 			} else if (intval($read_socket) == $rrdp_clients[$rrdp_replicator_pid]['ipc']) {
 
@@ -768,7 +772,7 @@ function rrdp_system__check() {
 function rrdp_system__encryption_init() {
 	global $rrdp_config;
 
-	$rsa = new \phpseclib\Crypt\RSA();
+	$rsa = new RSA();
 
 	if (!file_exists('./include/public.key') || !file_exists('./include/private.key')) {
 		$keys = $rsa -> createKey(2048);
@@ -788,7 +792,7 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['public_key_fingerprint'] = $rsa -> getPublicKeyFingerprint();
 }
 
-function rrdp_system__replicator(&$input) {
+function rrdp_system__replicator($input) {
 	global $rrdp_client, $rrd_config;
 
 	$status = @unserialize($input);
@@ -896,46 +900,7 @@ function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false,
 	}
 }
 
-function rrd_system__system_message($microtime_start, $msg, $level = 'normal', $exit = false) {
-	global $colors;
-
-	$microtime_end = microtime(true);
-	fwrite(STDOUT, sprintf("\r\n[%.5f] " . ANSI_RESET . "{$colors[$level]}%s" . ANSI_RESET, ($microtime_end - $microtime_start), $msg));
-	if ($exit)
-		die("\r\n");
-}
-
-function rrd_system__progressbar( $current, $max ) {
-	global $process_start;
-
-	if(empty($process_start)) $process_start = time();
-	$progress = round( $current / ( $max / 100 ), 2);
-	$progress_points = floor(40*$progress/100);
-	$timediff = time() - $process_start;
-	$estimated = ceil( ( ( 100 / $progress *  $timediff ) - $timediff ) );
-
-	$hours   = floor($estimated / 3600);
-	$minutes = floor(($estimated - $hours * 3600) / 60);
-	$seconds = floor($estimated - $hours * 3600 - $minutes * 60);
-
-	fwrite(STDOUT, "\0338");
-	fwrite(STDOUT, str_pad( "[" . ANSI_RESET . ANSI_GREEN_FG . str_repeat( "#", $progress_points ), 48, " ", STR_PAD_RIGHT) . ANSI_RESET . "] " . sprintf( "%6.2f", $progress ) . str_pad( "% ( ". sprintf( "%02dh %02dm %02ds", $hours, $minutes, $seconds ) . " left )", 20, " ", STR_PAD_RIGHT) );
-	if ($current == $max) {
-		unset($process_start);
-		print "\r\n";
-	}
-}
-
-function rrd_system__read_config_option($param = false) {
-	global $rrdp_config;
-	if ($param && array_key_exists($param, $rrdp_config)) {
-		return $rrdp_config[$param];
-	} else {
-		return false;
-	}
-}
-
-function rrdp_system__calc_bytes(&$str) {
+function rrdp_system__calc_bytes($str) {
 	return (ini_get('mbstring.func_overload') ? mb_strlen($str, '8bit') : strlen($str));
 }
 
@@ -944,7 +909,7 @@ function rrdp_system__count($variable, $value = 1) {
 	if (isset($rrdp_status[$variable])) {
 		/* use 32 bit counters only */
 		$rrdp_status[$variable] = (($rrdp_status[$variable] + $value) >= 2147483647) ? $rrdp_status[$variable] - 2147483647 + $value : $rrdp_status[$variable] + $value;
-		return;
+		return true;
 	}
 	return false;
 }
@@ -964,22 +929,6 @@ function rrdp_system__update($variable) {
 			break;
 	}
 	return;
-};
-
-function rrdp_system__debug($msg, $category, $severity, $environment = 'proxy') {
-	global $rrdp_config, $rrdp_admin_clients, $rrdp_admin_sockets, $colors, $severity_levels;
-
-#TODO
-
-
-	if (isset($rrdp_config['debug'][$environment]) && $rrdp_config['debug'][$environment] === true) {
-		foreach ($rrdp_admin_clients as $key => $rrdp_admin_client) {
-			if (isset($rrdp_admin_client['debug'][$environment]) && $rrdp_admin_client['debug'][$environment] === true) {
-				/* write debug message to socket and return default prompt for proviledge mode */
-				rrdp_system__socket_write($rrdp_admin_sockets[$key], "\r\n" . ANSI_RESET . "{$colors[$severity_levels[$severity]]}[" . $category . "] " . $msg);
-			}
-		}
-	}
 }
 
 function rrdp_system__return_prompt($socket) {
@@ -1007,12 +956,14 @@ function rrdp_system__socket_close($socket, $msg = false, $force = false) {
 	}
 
 	if ($force) {
-		$return = @socket_close($socket);
-	} else {
+		$linger = array ('l_linger' => 0, 'l_onoff' => 1);
+		socket_set_option($socket, SOL_SOCKET, SO_LINGER, $linger);
+		@socket_close($socket);
+	}else {
 		@socket_shutdown($socket, 2);
-		$return = @socket_close($socket);
+		@socket_close($socket);
 	}
-	return $return;
+	return true;
 }
 
 function rrdp_system__status_live($variable) {
@@ -1054,14 +1005,6 @@ function rrdp_system__convert2bytes($val) {
 	return $val;
 }
 
-function rrdp_system__errorlog($msg, $severity=SEVERITY_LEVEL_NOTIFICATION) {
-	global $severity_levels;
-
-	if(SYSTEM_LOGGING && array_key_exists($severity, $severity_levels))
-		@file_put_contents('./log/rrdp.' . date("mdY") . '.log', '['.date(DATE_RFC822).'] [' . $severity_levels[$severity] . '] ' . trim($msg) . "\r\n", FILE_APPEND);
-	return;
-}
-
 function rrdp_system__logging($location, $msg, $category, $severity) {
 	global $rrdp_config, $rrdp_admin_clients, $rrdp_admin_sockets, $colors, $rrdp_buffers, $severity_levels;
 
@@ -1079,7 +1022,7 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 					unset($drop);
 				}
 				$rrdp_buffers['logging_buffered'][] = '['.date(DATE_RFC822).'] [' . $severity_levels[$severity] . '] [' . $category . '] ' . trim($msg);
-			}else if ($location === LOGGING_LOCATION_SNMP && $rrdp_config[logging_severity_snmp] && $severity <= $rrdp_config[logging_severity_snmp]) {
+			}else if ($location === LOGGING_LOCATION_SNMP && $rrdp_config['logging_severity_snmp'] && $severity <= $rrdp_config['logging_severity_snmp']) {
 				if (!isset($rrdp_buffers['logging_snmp'])) {
 					$rrdp_buffers['logging_snmp'] = array();
 				}
@@ -1110,14 +1053,12 @@ function rrdp_system__filter($output, $args) {
 
 	if(!$output || !$args) return $output;
 
-	$return = "% Unrecognized arguments: '" . implode(' ', $args) . "'\r\n";
-
 	if(__count($args) >= 3 && $args[0] == '|' && in_array($args[1], array('i','e','b', 'I', 'E', 'B', 'exp') ) ) {
 
 		$args[2] = trim(implode(' ', array_slice($args, 2)), '"\'');
 		$output_rows = explode("\r\n", $output);
 
-		if(!is_array($output_rows)) return;
+		if(!is_array($output_rows)) return $output;
 		$total_matches = 0;
 		$output = '';
 		foreach($output_rows as $row_id => $row_value) {
@@ -1155,8 +1096,7 @@ function rrdp_system__filter($output, $args) {
 		$output .= "\r\n" . "Matches: " . $total_matches . "\r\n";
 		return $output;
 	}
-
-	return $return;
+	return "% Unrecognized arguments: '" . implode(' ', $args) . "'\r\n";
 }
 
 function rrdp_system__global_console_logging_update() {
@@ -1230,9 +1170,8 @@ function rrdp_cmd__clear($socket, $args) {
 	rrdp_system__socket_write($socket, '% Incomplete command. Type "clear ?" for a list of subcommands' . "\r\n");
 }
 
-function rrdp_cmd__clear_counters($socket) {
-	global $rrdp_admin_clients, $rrdp_status;
-	/* only privileged users are allowed to shut down the proxy from remote */
+function rrdp_cmd__clear_counters() {
+	global $rrdp_status;
 	foreach ($rrdp_status as $variable => $value) {
 		if ($value !== 'live') {
 			$rrdp_status[$variable] = 0;
@@ -1243,7 +1182,7 @@ function rrdp_cmd__clear_counters($socket) {
 }
 
 function rrdp_cmd__clear_logging($socket, $args) {
-	global $rrdp_config, $rrdp_buffers;
+	global $rrdp_buffers;
 
 	$arg = array_shift($args);
 	if ( !is_null($arg) ) {
@@ -1268,7 +1207,7 @@ function rrdp_cmd__clear_logging($socket, $args) {
 	return;
 }
 
-function rrdp_cmd__reset($socket, $args) {
+function rrdp_cmd__reset($socket) {
 	/* client would like to regularly clear and reset terminal screen */
 	rrdp_system__socket_write($socket, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT);
 	return;
@@ -1540,24 +1479,10 @@ function rrdp_cmd__show_logging($arg) {
 	$output = "\r\n";
 	if ($arg) {
 		switch($arg) {
-			case 'status' :
-				if (__sizeof($rrdp_msr_buffer) > 0) {
-					foreach ($rrdp_msr_buffer as $timeframe => $msr_commands) {
-						$output .= "$timeframe:\r\n";
-						foreach ($msr_commands as $timestamp => $msr_command) {
-							$output .= sprintf(" %-25s %s \r\n", $timestamp, $msr_command);
-						}
-						rrdp_system__socket_write($socket, $output . "\r\n");
-					}
-				} else {
-					rrdp_system__socket_write($socket, "no entries found\r\n");
-				}
-				break;
 			case 'buffered' :
 			case 'snmp' :
 				if (__sizeof($rrdp_buffers['logging_' . $arg]) > 0) {
 					foreach ($rrdp_buffers['logging_' . $arg] as $index => $row) {
-						//rrdp_system__socket_write($socket, "row\r\n");
 						$output .= $row . "\r\n";
 					}
 				} else {
@@ -1565,7 +1490,7 @@ function rrdp_cmd__show_logging($arg) {
 				}
 				break;
 			default :
-				$output = "% Unrecognized command" . $args . "\r\n";
+				$output = "% Unrecognized command" . $arg . "\r\n";
 				break;
 		}
 	} else {
@@ -1578,7 +1503,7 @@ function rrdp_cmd__show_logging($arg) {
 function rrdp_cmd__show_msr($arg) {
 	global $rrdp_msr_buffer;
 
-	$output = '';
+	$output = "\r\n";
 	if (isset($arg)) {
 		switch($arg) {
 			case 'buffer' :
@@ -1594,11 +1519,10 @@ function rrdp_cmd__show_msr($arg) {
 				}
 				break;
 			case 'health' :
-				break;
 			case 'status' :
 				break;
 			default :
-				$output = "% Unrecognized command" . $args . "\r\n";
+				$output = "% Unrecognized command" . $arg . "\r\n";
 				break;
 		}
 	} else {
@@ -1611,7 +1535,6 @@ function rrdp_cmd__show_msr($arg) {
 function rrdp_cmd__show_version($systemd = false) {
 	global $rrdp_config, $rrdp_clients, $rrdp_repl_master_pid, $rrdp_repl_slave_pid;
 
-	$output = '';
 	$runtime = microtime(true) - $rrdp_config['start'];
 	$days = floor($runtime / 86400);
 	$hours = floor(($runtime - $days * 86400) / 3600);
@@ -1662,7 +1585,7 @@ function rrdp_cmd__debug($socket, $args) {
 			switch($args[1]) {
 				case 'on' :
 					$rrdp_admin_clients[$i]['debug'][$process] = true;
-					$orginal_state = (isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true) ? true : false;
+					$original_state = isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true;
 					$rrdp_config['debug'][$process] = true;
 
 					if ($process == 'replicator') {
@@ -1674,13 +1597,13 @@ function rrdp_cmd__debug($socket, $args) {
 						}
 					}
 
-					if ($orginal_state === false) {
+					if ($original_state === false) {
 						rrdp_system__socket_write($socket, "GLOBAL DEBUG mode for $process process started.\r\n");
 					}
 					break;
 				case 'off' :
 					unset($rrdp_admin_clients[$i]['debug'][$process]);
-					$orginal_state = (isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true) ? true : false;
+					$original_state = isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true;
 
 					$debug_sessions_running = false;
 					foreach ($rrdp_admin_clients as $rrdp_admin_client) {
@@ -1699,7 +1622,7 @@ function rrdp_cmd__debug($socket, $args) {
 						}
 					}
 
-					if ($orginal_state === true && $debug_sessions_running === false) {
+					if ($original_state === true && $debug_sessions_running === false) {
 						$rrdp_config['debug'][$process] = false;
 						rrdp_system__socket_write($socket, "GLOBAL DEBUG mode for $process process stopped.\r\n");
 					}
@@ -1720,7 +1643,6 @@ function rrdp_cmd__debug($socket, $args) {
 }
 
 function rrdp_cmd__set($socket, $args) {
-	global $rrdp_admin_clients, $rrdp_help_messages;
 
 	$arg = array_shift($args);
 	if ( !is_null($arg) ) {
@@ -1917,14 +1839,13 @@ function rrdp_cmd__set_client($socket, $args) {
 }
 
 function rrdp_cmd__set_rsa($socket, $args) {
-
 	global $rrdp_config;
 
 	$arg = array_shift($args);
 	if ( !is_null($arg) ) {
 		switch($arg) {
 			case 'keys' :
-				$rsa = new \phpseclib\Crypt\RSA();
+				$rsa = new RSA();
 				$keys = $rsa -> createKey(2048);
 				$rrdp_config['encryption']['public_key'] = $keys['publickey'];
 				$rrdp_config['encryption']['private_key'] = $keys['privatekey'];
@@ -2029,10 +1950,13 @@ function rrdp_cmd__set_logging($socket, $args) {
 }
 
 
-
-
 /**
  * Handle master, slave as well as client processes
+ * @param $ipc_sockets
+ * @param $type
+ * @param bool $ssock
+ * @param bool $arg1
+ * @return int
  */
 function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) {
 	GLOBAL $__server_listening, $rrdp_status, $rrdcached_pid, $ipc_global_resource_id, $debug_category, $c_pid;
@@ -2155,7 +2079,6 @@ function rrdp_sig_handler($signo) {
 			exit ;
 			break;
 		case SIGHUP :
-			break;
 		case SIGUSR1 :
 			break;
 		default :

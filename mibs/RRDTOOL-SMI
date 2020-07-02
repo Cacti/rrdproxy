@@ -1,0 +1,55 @@
+RRDTOOL-SMI DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY,
+	OBJECT-IDENTITY,
+	enterprises
+		FROM SNMPv2-SMI;
+
+rrdtool MODULE-IDENTITY
+	LAST-UPDATED "200404010000Z"
+	ORGANIZATION "RRD Tool"
+	CONTACT-INFO
+		"    Tobi Oetiker
+
+                Postal: OETIKER+PARTNER
+                        Aarweg 15
+                        CH-4600 Olten
+                        Switzerland
+
+                Telephone: +41 62 213 9907
+                E-mail: tobi@oetiker.ch
+
+                RRD Tool Information:
+                  http://oss.oetiker.ch/rrdtool/
+		"
+	DESCRIPTION
+		"The Structure of RRDTool fellow projects"
+	::= { enterprises 14697 }	-- assigned by IANA
+
+rrfw    OBJECT-IDENTITY
+	STATUS	current
+	DESCRIPTION
+		"Round Robin Database Framework. 
+                http://rrfw.sourceforge.net/
+                "
+	::= { rrdtool 1 }
+
+mobilerrd  OBJECT-IDENTITY
+	STATUS	current
+	DESCRIPTION
+		"RRDtool within KPN Mobile. 
+                "
+	::= { rrdtool 2 }
+	
+rrdmonitor  OBJECT-IDENTITY
+	STATUS	current
+	DESCRIPTION 
+		"The MIB module for SNMP variables specific to rrdmonitor project
+		Contact: skorza@gmail.com, rrdmonitor@10096.it
+                "
+	::= { rrdtool 3 }
+
+-- more to come if necessary.
+
+END
