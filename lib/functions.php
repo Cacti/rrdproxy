@@ -199,11 +199,10 @@ function __logging($location, $msg, $category, $severity) {
 		|| ($location === LOGGING_LOCATION_SNMP && $rrdp_config['logging_severity_snmp'] && $severity <= $rrdp_config['logging_severity_snmp'])
 		|| ($rrdp_config['logging_severity_console'] && $severity <= $rrdp_config['logging_severity_console'] && ( $rrdp_config['logging_category_console'] == 'all' || stripos($rrdp_config['logging_category_console'], $category) !== false) ) ) {
 
-		socket_write( $ipc_socket_parent, serialize( array('type' => 'debug', 'debug' => array('msg' => '#' . $ipc_global_resource_id . ' [' . $c_pid . '] ' . $msg, 'category' => $category, 'severity' => $severity, 'location' => $location ) ) ) . "\r\n");
+		@socket_write( $ipc_socket_parent, serialize( array('type' => 'debug', 'status' => 'debugging', 'debug' => array('msg' => '#' . $ipc_global_resource_id . ' [' . $c_pid . '] ' . $msg, 'category' => $category, 'severity' => $severity, 'location' => $location ) ) ) . "\r\n");
 		usleep(10000);
 	}
 
-	return;
 }
 
 function __sizeof($array) {

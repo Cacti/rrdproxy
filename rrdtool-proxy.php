@@ -1,7 +1,8 @@
+#!/usr/bin/php
 <?php
 /*
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2019 The Cacti Group                                 |
+ | Copyright (C) 2004-2021 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -81,19 +82,19 @@ if (__sizeof($parms) != 0) {
 
 /* ---------------------------- SYSTEM SETUP ROUTINE -------------------------------------- */
 
-if (!file_exists('./include/config') ) {
-	if ( $wizard === true ) {
-		/* unconfigured system */
+if (!file_exists('./include/config') OR $wizard === true ) {
+	if ( $systemd === true ) {
+		rrd_system__system_die('Please run "rrdtool-proxy.php -w" to start the proxy wizard.');
+	}else {
+		/* configure proxy */
 		init_wizard();
-	} elseif ( $systemd === true ) {
-		rrd_system__system_die('Configuration file missing. Please run "rrdtool-proxy.php -w" to start the proxy wizard.');
 	}
 } else {
 	include_once ('./include/config');
 	if ( empty($rrdp_config) || !array_key_exists('version', $rrdp_config) || version_compare($rrdp_config['version'], RRDP_VERSION, '<')) {
-		/* invalid configuration or version upgrade */
+		/* invalid configuration or version upgrade requires reconfiguration */
 		if ( $systemd === true ) {
-			rrd_system__system_die('Proxy has not been configured properly. Please re-run "rrdtool-proxy.php -w" to start the proxy wizard.');
+			rrd_system__system_die('Proxy has not been configured properly. Please re-run "rrdtool-proxy.php -w" to config the proxy wizard properly.');
 		}
 		init_wizard();
 	}
@@ -109,6 +110,10 @@ if (!file_exists('./include/config') ) {
 	/* No Windows, please ;) */
 	$support_os = strstr(PHP_OS, 'WIN') ? false : true;
 	rrd_system__system_boolean_message('test: operation system supported', $support_os, true);
+
+	/* check PHP version */
+	$php_version =  (!defined('PHP_VERSION_ID') OR (PHP_VERSION_ID < RRDP_PHP_VERSION_REQUIRED)) ? false : true;
+	rrd_system__system_boolean_message( 'test: php version', $php_version, true );
 
 	/* RRDtool Proxy has already been started ? */
 	$not_running = is_rrdtool_proxy_running();
@@ -203,12 +208,13 @@ $__server_listening = true;
 $rrdp_msr_buffer = array();
 $rrdp_buffers = array('logging_buffered' => array(), 'logging_snmp' => array() );
 
-/* create a Service TCP Stream socket supporting IPv6 and 4 */
-$rrdp_admin = @socket_create( ($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6 , SOCK_STREAM, SOL_TCP);
 
-/* define a socket for proxy administration */
-if (!$rrdp_admin) {
+/* set up an admin socket for proxy administration */
+$rrdp_admin = @socket_create( ($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6 , SOCK_STREAM, SOL_TCP);
+if ($rrdp_admin === false) {
 	rrd_system__system_die(NL . 'Unable to create socket. Error: ' . socket_strerror(socket_last_error()) . NL);
+}else {
+	$rrdp_admin_resource_id = rrdp_system__get_resource_id($rrdp_admin);
 }
 @socket_set_option($rrdp_admin, SOL_SOCKET, SO_REUSEADDR, 1);
 if (!@socket_bind($rrdp_admin, (($rrdp_config['ipv6']) ? '::1' : '127.0.0.1'), $rrdp_config['port_admin'])) {
@@ -216,25 +222,26 @@ if (!@socket_bind($rrdp_admin, (($rrdp_config['ipv6']) ? '::1' : '127.0.0.1'), $
 }
 socket_set_nonblock($rrdp_admin);
 socket_listen($rrdp_admin);
-rrd_system__system_boolean_message('init: tcp admin socket', $rrdp_admin, true);
+rrd_system__system_boolean_message('init: tcp admin socket #' . $rrdp_admin_resource_id, $rrdp_admin, true);
 rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Start listening to port ' . $rrdp_config['address'] . ':' . $rrdp_config['port_admin'], 'SYS', SEVERITY_LEVEL_NOTIFICATION);
 
-/* set up a client socket request against RRDtool */
+
+/* set up a client socket handling requests against RRDtool */
 $rrdp_client = @socket_create( (($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6 ), SOCK_STREAM, SOL_TCP);
-if (!$rrdp_client) {
+if ($rrdp_client === false) {
 	rrd_system__system_die(NL . 'Unable to create socket. Error: ' . socket_strerror(socket_last_error()) . NL);
+}else {
+	$rrdp_client_resource_id = rrdp_system__get_resource_id($rrdp_client);
 }
 @socket_set_option($rrdp_client, SOL_SOCKET, SO_REUSEADDR, 1);
 if (!@socket_bind($rrdp_client, $rrdp_config['address'], $rrdp_config['port_client'])) {
 	rrd_system__system_die(NL . 'Unable to bind socket to \'' . $rrdp_config['address'] . ':' . $rrdp_config['port_client'] . '\'' . NL . 'Error: ' . socket_strerror(socket_last_error()) . NL);
 }
 socket_set_nonblock($rrdp_client);
-
-rrd_system__system_boolean_message('init: tcp client socket', $rrdp_client, true);
-
 socket_listen($rrdp_client);
-#TODO: This line needs to be removed once replicator is ready
+rrd_system__system_boolean_message('init: tcp client socket #' . $rrdp_client_resource_id, $rrdp_client, true);
 rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Start listening to port ' . $rrdp_config['address'] . ':' . $rrdp_config['port_client'], 'SYS', SEVERITY_LEVEL_NOTIFICATION);
+
 
 $rrdp_clients = array();
 $rrdp_ipc_sockets = array();
@@ -291,6 +298,10 @@ if ($rrdp_config['path_rrdcached']) {
 #	$rrdp_clients[$rrdp_repl_slave_pid]['type'] = 'S';
 #	$rrdp_ipc_sockets[$key] = $ipc_sockets;
 #}
+$rrdp_replicator_pid = 'undefined';
+
+
+
 
 /* Feedback from replicator required - let's wait for another sec */
 usleep(1000000);
@@ -314,7 +325,7 @@ if ($systemd) {
 	file_put_contents('./run/rrdtool-proxy.pid', posix_getpid());
 }
 /* ---------------------------- END - SYSTEM STARTUP ROUTINE ---------------------------- */
-
+$bla = 1;
 while ($__server_listening) {
 
 	$write = array();
@@ -328,7 +339,7 @@ while ($__server_listening) {
 	/* setup clients listening to socket for reading */
 	$read = array();
 
-	/* do not listen to client connection requests as long as the system is not in state fully-synced */
+	/* #TODO do not listen to client connection requests as long as the system is not in state fully-synced */
 	if ($rrdp_config['last_sync'] !== false) {
 		$read[0] = $rrdp_client;
 	}
@@ -339,56 +350,60 @@ while ($__server_listening) {
 		$child_status = pcntl_waitpid($child_pid, $status, WNOHANG);
 		if ($child_status == -1 || $child_status > 0) {
 			rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'REMOVAL OF PID [' . $child_pid . ']', 'SYS', SEVERITY_LEVEL_NOTIFICATION);
-			unset($rrdp_ipc_sockets[intval($rrdp_clients[$child_pid]['ipc'])]);
+			unset($rrdp_ipc_sockets[ $rrdp_clients[$child_pid]['ipc'] ]);
 			unset($rrdp_clients[$child_pid]);
 		} else {
 			$key = $rrdp_clients[$child_pid]['ipc'];
 			//rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'WAITING FOR ' . $child_pid, 'SYS', SEVERITY_LEVEL_ALERT);
-			if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+			if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 				$read[] = $rrdp_ipc_sockets[$key][1];
 			}
 		}
 	}
 
 	/* all admin connections need to be monitored for changes, too */
-	foreach ($rrdp_admin_clients as $rrdp_admin_client) {
-		$read[] = $rrdp_admin_client['socket'];
+	if(sizeof($rrdp_admin_clients) > 0 ) {
+		foreach ($rrdp_admin_clients as $rrdp_admin_client) {
+			$read[] = $rrdp_admin_client['socket'];
+		}
 	}
-
 	$ready = @socket_select($read, $write, $except, $tv_sec);
 
 	pcntl_signal_dispatch();
 
+
+
 	if ($ready) {
 		foreach ($read as $read_socket_index => $read_socket) {
-			if ($read_socket == $rrdp_client) {
+			$read_socket_resource_id = rrdp_system__get_resource_id($read_socket);
+			if ($read_socket_resource_id == $rrdp_client_resource_id) {
 				/* a default client is trying to connect */
 				if ($rrdp_config['max_cnn'] > __sizeof($rrdp_clients)) {
 					$socket_descriptor = socket_accept($read_socket);
 					socket_getpeername($socket_descriptor, $ip);
+
 					/* verify authorization */
 					if (array_key_exists($ip, $rrdp_config['remote_clients']) === true) {
-
 						/* setup IPC */
 						socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $ipc_sockets);
 						list($ipc_socket_parent, $ipc_socket_child) = $ipc_sockets;
-						$key = intval($ipc_socket_child);
+						$socket_resource_id = rrdp_system__get_resource_id($ipc_socket_child);
 
 						/* fork a child process for that connection */
 						$pid = handle_child_processes($ipc_sockets, 3, $rrdp_client, $socket_descriptor);
 						$rrdp_clients[$pid]['ip'] = $ip;
-						$rrdp_clients[$pid]['ipc'] = $key;
+						$rrdp_clients[$pid]['ipc'] = $socket_resource_id;
 						$rrdp_clients[$pid]['type'] = 'C';
 						$rrdp_clients[$pid]['client_socket'] = $socket_descriptor;
-						$rrdp_ipc_sockets[$key] = $ipc_sockets;
+						$rrdp_ipc_sockets[$socket_resource_id] = $ipc_sockets;
 
 						rrdp_system__update('max_client_connections');
-						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' Default connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_DEBUG);
+						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $socket_resource_id . ' Default connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_DEBUG);
 					} else {
 						@socket_write($socket_descriptor, 'ERROR: Access denied.' . NL);
 						@socket_close($socket_descriptor);
 						rrdp_system__count('connections_refused');
-						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' Default connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
+						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Client connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
 					}
 				} else {
 					rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Critical: Maximum number of client connections has been exhausted. Check system setup ("ulimit -n")!', 'SYS', SEVERITY_LEVEL_ALERT);
@@ -396,7 +411,7 @@ while ($__server_listening) {
 					@socket_write($socket_descriptor, 'ERROR: Too many open connections.' . NL);
 					@socket_close($socket_descriptor);
 				}
-			} elseif ($read_socket == $rrdp_admin) {
+			} elseif ($read_socket_resource_id == $rrdp_admin_resource_id) {
 
 				/* check if this is a new service client that is trying to connect */
 				if ($rrdp_config['max_admin_cnn'] > __sizeof($rrdp_admin_clients)) {
@@ -409,28 +424,28 @@ while ($__server_listening) {
 					/* take care of IPv6, IPv4 and embedded IPv4 addresses */
 					if (in_array($ip, array('127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1'))) {
 						if (!in_array($socket_descriptor, $rrdp_admin_sockets)) {
-							$key = intval($socket_descriptor);
-							$rrdp_admin_sockets[$key] = $socket_descriptor;
-							$rrdp_admin_clients[$key] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'logging_severity_console' => $rrdp_config['logging_severity_terminal'], 'logging_category_console' => $rrdp_config['logging_category_terminal'], 'debug' => false, 'type' => 'srv');
+							$socket_resource_id = rrdp_system__get_resource_id($socket_descriptor);
+							$rrdp_admin_sockets[$socket_resource_id] = $socket_descriptor;
+							$rrdp_admin_clients[$socket_resource_id] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'logging_severity_console' => $rrdp_config['logging_severity_terminal'], 'logging_category_console' => $rrdp_config['logging_category_terminal'], 'debug' => false, 'type' => 'srv');
 
 							socket_write($socket_descriptor, rrdp_get_cacti_proxy_logo() . NL . NL);
 							socket_Write($socket_descriptor, RRDP_VERSION_FULL);
 							socket_write($socket_descriptor, ANSI_RESET . ANSI_GREEN_FG . $rrdp_config['name'] . '>' . ANSI_RESET . ' ');
 
 							rrdp_system__update('max_admin_connections');
-							rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' Service connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_DEBUG);
+							rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $socket_resource_id . ' Service connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_DEBUG);
 						}
 
 					} elseif ($ip == $rrdp_config['slave']) {
-						$key = intval($socket_descriptor);
-						$rrdp_admin_sockets[$key] = $socket_descriptor;
-						$rrdp_admin_clients[$key] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'debug' => false, 'type' => 'msr');
-						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' RRDtool-Proxy slave connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_INFORMATIONAL);
+						$socket_resource_id = rrdp_system__get_resource_id($socket_descriptor);
+						$rrdp_admin_sockets[$socket_resource_id] = $socket_descriptor;
+						$rrdp_admin_clients[$socket_resource_id] = array('socket' => $socket_descriptor, 'ip' => $ip, 'privileged' => false, 'debug' => false, 'type' => 'msr');
+						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $socket_resource_id . ' RRDtool-Proxy slave connection request [IP: ' . $ip . '] granted.', 'ACL', SEVERITY_LEVEL_INFORMATIONAL);
 					} else {
 						@socket_write($socket_descriptor, 'ERROR: Access denied.' . NL);
 						@socket_close($socket_descriptor);
 						rrdp_system__count('connections_refused');
-						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $key . ' Service connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
+						rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#[n/a] Service connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
 						break;
 					}
 				} else {
@@ -439,7 +454,7 @@ while ($__server_listening) {
 					@socket_write($socket_descriptor, 'ERROR: Maximum number of service connections has been exceeded.' . NL);
 					@socket_close($socket_descriptor);
 				}
-			} elseif (intval($read_socket) == $rrdp_clients[$rrdp_replicator_pid]['ipc']) {
+			} elseif ($rrdp_replicator_pid !== 'undefined' AND $read_socket_resource_id == $rrdp_clients[$rrdp_replicator_pid]['ipc']) {
 
 				/* === REPLICATOR IPC message === */
 				$input = '';
@@ -475,8 +490,8 @@ while ($__server_listening) {
 			} else {
 
 				/* handle established connections */
-				$index = intval($read_socket);
-				if (isset($rrdp_ipc_sockets[$index])) {
+
+				if (isset($rrdp_ipc_sockets[$read_socket_resource_id])) {
 					/* === CLIENT IPC message === */
 					$input = '';
 					while (1) {
@@ -484,14 +499,14 @@ while ($__server_listening) {
 						if ($recv === false) {
 							/* timeout  */
 							rrdp_system__count('connections_timeout');
-							rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $index . ' IPC connection timeout detected.', 'IPC', SEVERITY_LEVEL_CRITICAL);
+							rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $read_socket_resource_id . ' IPC connection timeout detected.', 'IPC', SEVERITY_LEVEL_CRITICAL);
 							/* close IPC child socket */
 							break;
 						} elseif ($recv == '') {
 							/* session closed by child process */
 							if ($input) {
 								rrdp_system__client($input);
-								rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $index . ' IPC connection closed by child process', 'IPC', SEVERITY_LEVEL_DEBUG);
+								rrdp_system__logging(LOGGING_LOCATION_BUFFERED, '#' . $read_socket_resource_id . ' IPC connection closed by child process', 'IPC', SEVERITY_LEVEL_DEBUG);
 							}
 							@socket_close($read_socket);
 							break;
@@ -505,14 +520,12 @@ while ($__server_listening) {
 							}
 						}
 					}
-					unset($rrdp_ipc_sockets[$index]);
+					unset($rrdp_ipc_sockets[$read_socket_resource_id]);
 					continue;
 
-				} elseif (isset($rrdp_admin_sockets[$index])) {
+				} elseif (isset($rrdp_admin_sockets[$read_socket_resource_id])) {
 
 					/* === this is a service connection - means default or master-slave === */
-					$i = intval($read_socket);
-
 					$recv = @socket_read($read_socket, 100000, PHP_BINARY_READ);
 					rrdp_system__count('srv_bytes_received', rrdp_system__calc_bytes($recv));
 
@@ -521,7 +534,7 @@ while ($__server_listening) {
 						socket_shutdown($read_socket);
 						socket_close($read_socket);
 						rrdp_system__count('srv_connection_broken');
-						unset($rrdp_admin_clients[$index]);
+						unset($rrdp_admin_clients[$read_socket_resource_id]);
 						continue;
 					} elseif ($recv == "\n") {
 						/* end of transmission */
@@ -547,7 +560,7 @@ while ($__server_listening) {
 						if ($cmd) {
 
 							rrdp_system__count('queries_system');
-							$root = $rrdp_help_messages['?'][(($rrdp_admin_clients[$index]['privileged']) ? 1 : 0)];
+							$root = $rrdp_help_messages['?'][(($rrdp_admin_clients[$read_socket_resource_id]['privileged']) ? 1 : 0)];
 
 							if (isset($rrdp_aliases[$cmd])) {
 								/* replace aliases */
@@ -643,10 +656,8 @@ while ($__server_listening) {
 						rrdp_system__return_prompt($read_socket);
 
 					} else {
-						/* look for error messages */
-						$errorcode = socket_last_error();
 						socket_close($rrdp_admin_client['socket']);
-						unset($rrdp_admin_clients[$index]);
+						unset($rrdp_admin_clients[$read_socket_resource_id]);
 						rrdp_system__count('aborted_clients');
 						continue;
 					}
@@ -897,7 +908,8 @@ function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false,
 		}
 		rrd_system__system_die(NL);
 	} else {
-		rrdp_system__logging(LOGGING_LOCATION_BUFFERED, $status . ' ' . $msg, 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
+		if(!defined('WIZARD_RUNNING'))
+			rrdp_system__logging(LOGGING_LOCATION_BUFFERED, $status . ' ' . $msg, 'SYS', SEVERITY_LEVEL_INFORMATIONAL);
 	}
 }
 
@@ -935,10 +947,11 @@ function rrdp_system__update($variable) {
 function rrdp_system__return_prompt($socket) {
 	global $rrdp_admin_clients, $rrdp_config, $colors;
 
-	$i = intval($socket);
-
-	$prompt = ANSI_RESET . (($rrdp_admin_clients[$i]['debug']) ? $colors['debug'] : $colors['prompt']) . $rrdp_config['name'] . (($rrdp_admin_clients[$i]['privileged']) ? '#' : '>') . ANSI_RESET . ' ';
-	rrdp_system__socket_write($socket, $prompt);
+	$socket_resource_id = rrdp_system__get_resource_id($socket);
+	if(array_key_exists($socket_resource_id, $rrdp_admin_clients)) {
+		$prompt = ANSI_RESET . (($rrdp_admin_clients[$socket_resource_id]['debug']) ? $colors['debug'] : $colors['prompt']) . $rrdp_config['name'] . (($rrdp_admin_clients[$socket_resource_id]['privileged']) ? '#' : '>') . ANSI_RESET . ' ';
+		rrdp_system__socket_write($socket, $prompt);
+	}
 }
 
 function rrdp_system__socket_write($socket, $output, $counter = '') {
@@ -992,18 +1005,23 @@ function rrdp_system__status_live($variable) {
 }
 
 function rrdp_system__convert2bytes($val) {
-
-	$val = trim($val);
-	$last = strtolower($val[strlen($val) - 1]);
-	switch($last) {
-		case 'g' :
-			$val *= 1024;
-		case 'm' :
-			$val *= 1024;
-		case 'k' :
-			$val *= 1024;
+	preg_match('/^\s*([0-9.]+)\s*([KMGTPE])B?\s*$/i', $val, $matches);
+	$num = (float)$matches[1];
+	switch (strtoupper($matches[2])) {
+		case 'E':
+			$num = $num * 1024;
+		case 'P':
+			$num = $num * 1024;
+		case 'T':
+			$num = $num * 1024;
+		case 'G':
+			$num = $num * 1024;
+		case 'M':
+			$num = $num * 1024;
+		case 'K':
+			$num = $num * 1024;
 	}
-	return $val;
+	return intval($num);
 }
 
 function rrdp_system__logging($location, $msg, $category, $severity) {
@@ -1144,17 +1162,25 @@ function rrdp_system__global_console_logging_update() {
 	/* replication master and slave processes */
 	if ($rrdp_repl_master_pid) {
 		$key = $rrdp_clients[$rrdp_repl_master_pid]['ipc'];
-		if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+		if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 			@socket_write($rrdp_ipc_sockets[$key][1], serialize( array('type' => 'reload_running_config', 'rrdp_config' => $rrdp_config)) . NL);
 		}
 	}
 	if ($rrdp_repl_slave_pid) {
 		$key = $rrdp_clients[$rrdp_repl_slave_pid]['ipc'];
-		if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+		if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 			@socket_write($rrdp_ipc_sockets[$key][1], serialize( array('type' => 'reload_running_config', 'rrdp_config' => $rrdp_config)) . NL);
 		}
 	}
 	return;
+}
+
+function rrdp_system__get_resource_id($object) {
+    return (PHP_VERSION_ID >= 80000) ? spl_object_id($object) : intval($object);
+}
+
+function rrdp_system__is_resource($object) {
+	return (PHP_VERSION_ID >= 80000) ? is_object($object) : is_resource($object);
 }
 
 /* ####################################   SYSTEM COMMANDS   #################################### */
@@ -1179,7 +1205,6 @@ function rrdp_cmd__clear_counters() {
 		}
 	}
 	rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Counters have been cleared', 'SYS', SEVERITY_LEVEL_NOTIFICATION);
-	return;
 }
 
 function rrdp_cmd__clear_logging($socket, $args) {
@@ -1205,13 +1230,11 @@ function rrdp_cmd__clear_logging($socket, $args) {
 	} else {
 		rrdp_system__socket_write($socket, '% Type "clear logging ?" for a list of subcommands' . NL);
 	}
-	return;
 }
 
 function rrdp_cmd__reset($socket) {
 	/* client would like to regularly clear and reset terminal screen */
 	rrdp_system__socket_write($socket, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT);
-	return;
 }
 
 function rrdp_cmd__enable($socket, $args) {
@@ -1227,42 +1250,37 @@ function rrdp_cmd__enable($socket, $args) {
 	}
 
 	if (!$invalid) {
-		$i = intval($socket);
+		$socket_resource_id = rrdp_system__get_resource_id($socket);
 		/* only a local connected user is allowed to switch to enhanced mode */
-		if (in_array($rrdp_admin_clients[$i]['ip'], array('127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1'))) {
-			$rrdp_admin_clients[$i]['privileged'] = true;
+		if (in_array($rrdp_admin_clients[$socket_resource_id]['ip'], array('127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1'))) {
+			$rrdp_admin_clients[$socket_resource_id]['privileged'] = true;
 			rrdp_system__global_console_logging_update();
-			return;
 		} else {
 			rrdp_system__socket_write($socket, '% Privileged mode is restricted to localhost only' . NL);
 		}
 	} else {
 		rrdp_system__socket_write($socket, '% Invalid privileged mode password passed' . NL);
 	}
-
-	/* permission denied */
-	return;
 }
 
 function rrdp_cmd__disable($socket, $args) {
 	global $rrdp_admin_clients;
 	if (!$args) {
-		$i = intval($socket);
+		$socket_resource_id = rrdp_system__get_resource_id($socket);
 		/* client would like to return to unprivileged mode */
-		$rrdp_admin_clients[$i]['privileged'] = false;
+		$rrdp_admin_clients[$socket_resource_id]['privileged'] = false;
 		rrdp_system__global_console_logging_update();
 		return;
 	}
 	/* permission denied */
 	rrdp_system__socket_write($socket, '% Unrecognized command' . NL);
-	return;
 }
 
 function rrdp_cmd__quit($socket, $args) {
 	global $rrdp_admin_clients, $rrdp_admin_sockets;
 
 	/* ignore arguments */
-	$i = intval($socket);
+	$socket_resource_id = rrdp_system__get_resource_id($socket);
 
 	/* leave privileged mode if enabled */
 	rrdp_cmd__disable($socket, $args);
@@ -1274,19 +1292,18 @@ function rrdp_cmd__quit($socket, $args) {
 	rrdp_system__socket_write($socket, 'Bye!' . NL);
 
 	/* client would like to regularly close the connection */
-	socket_shutdown($rrdp_admin_clients[$i]['socket'], 2);
-	socket_close($rrdp_admin_clients[$i]['socket']);
-	unset($rrdp_admin_clients[$i]);
-	unset($rrdp_admin_sockets[$i]);
-
-	return;
+	socket_shutdown($rrdp_admin_clients[$socket_resource_id]['socket'], 2);
+	socket_close($rrdp_admin_clients[$socket_resource_id]['socket']);
+	unset($rrdp_admin_clients[$socket_resource_id]);
+	unset($rrdp_admin_sockets[$socket_resource_id]);
 }
 
 function rrdp_cmd__shutdown($socket, $args) {
 	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdcached_pid, $microtime_start, $rrdp_process_types, $systemd;
 
 	if (!$args) {
-		if ($socket === 'SIGTERM' || (isset($rrdp_admin_clients[intval($socket)]) && $rrdp_admin_clients[intval($socket)]['privileged'] === true)) {
+		$socket_resource_id = rrdp_system__get_resource_id($socket);
+		if ($socket === 'SIGTERM' || (isset($rrdp_admin_clients[ $socket_resource_id ]) && $rrdp_admin_clients[ $socket_resource_id ]['privileged'] === true)) {
 
 			$microtime_start = microtime(true);
 
@@ -1297,7 +1314,6 @@ function rrdp_cmd__shutdown($socket, $args) {
 			/* stop accepting client updates */
 			socket_close($rrdp_client);
 			rrd_system__system_boolean_message('close: Client socket', true, false);
-
 
 			/* stop RRDCached daemon after flushing all updates out to disk */
 			if ($rrdcached_pid) {
@@ -1315,17 +1331,17 @@ function rrdp_cmd__shutdown($socket, $args) {
 			}
 
 			/* shutdown Replicator:
-			 * Stop triggering incremental syncronisation while we are waiting for other proxies picking up outstanding DIFFs.
+			 * Stop triggering incremental synchronization while we are waiting for other proxies picking up outstanding DIFFs.
 			 * We have to ensure that other nodes are up-to-date before we leave the cluster temporarily.
 			 *
-			 * BUT we are forced to shutdown then we have to shutdown asap.
+			 * BUT we are forced to shutdown, so we have to shutdown asap.
 			 * */
 			foreach ($rrdp_clients as $child_pid => $client) {
 				if ($socket === 'SIGTERM') {
 					posix_kill($child_pid, SIGTERM);
 				} else {
 					$key = $rrdp_clients[$child_pid]['ipc'];
-					if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+					if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 						posix_kill($child_pid, SIGTERM);
 						@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'shutdown')) . NL);
 					}
@@ -1347,11 +1363,11 @@ function rrdp_cmd__shutdown($socket, $args) {
 			foreach ($rrdp_admin_clients as $index => $rrdp_admin_client) {
 				if ($socket === 'SIGTERM') {
 					@socket_write($rrdp_admin_client['socket'], 'SIGTERM received. Proxy server is shutting down.' . NL);
-				} elseif ($index != intval($socket)) {
-					@socket_write($rrdp_admin_client['socket'], 'SHUTDOWN command received by admin instance #' . intval($socket) . '. Proxy server is shutting down.' . NL);
+				} elseif ($index != $socket_resource_id) {
+					@socket_write($rrdp_admin_client['socket'], 'SHUTDOWN command received by admin instance #' . $socket_resource_id . '. Proxy server is shutting down.' . NL);
 				}
-				@socket_close($rrdp_admin_clients['socket']);
-				rrd_system__system_boolean_message(' stop: [SOCKET:' . intval($rrdp_admin_client['socket']) . '] Service connection closed', 1, false);
+				@socket_close($rrdp_admin_client['socket']);
+				rrd_system__system_boolean_message(' stop: [SOCKET:' . rrdp_system__get_resource_id($rrdp_admin_client['socket']) . '] Service connection closed', 1, false);
 			}
 
 			if ($systemd === false) {
@@ -1360,18 +1376,17 @@ function rrdp_cmd__shutdown($socket, $args) {
 			exit ;
 		}
 	}
-	/* permission denied */
+
 	rrdp_system__socket_write($socket, '% Unrecognized command' . NL);
-	return;
 }
 
 function rrdp_cmd__list($socket, $args=false, $root=false) {
 	global $rrdp_admin_clients, $rrdp_help_messages;
 
 	if (!$root) {
-		$i = intval($socket);
+		$socket_resource_id = rrdp_system__get_resource_id($socket);
 		$output = '';
-		foreach ($rrdp_help_messages['?'][ intval($rrdp_admin_clients[$i]['privileged']) ] as $cmd => $description) {
+		foreach ($rrdp_help_messages['?'][ intval($rrdp_admin_clients[$socket_resource_id]['privileged']) ] as $cmd => $description) {
 			$output .= sprintf('  %-15s %s' . NL, $cmd, ( is_array($description) ? $description['info'] : $description ) );
 		}
 		$output .= NL;
@@ -1384,7 +1399,6 @@ function rrdp_cmd__list($socket, $args=false, $root=false) {
 		$output .= NL;
 		rrdp_system__socket_write($socket, rrdp_system__filter($output, $args));
 	}
-	return;
 }
 
 function rrdp_cmd__show($socket, $args) {
@@ -1399,8 +1413,8 @@ function rrdp_cmd__show($socket, $args) {
 		switch ($arg) {
 			case 'threads':
 				$output = NL . sprintf(' %-10s %-15s %-3s' . NL, 'ID', 'IP', 'Privileged Mode');
-				foreach ($rrdp_admin_clients as $client) {
-					$output .= sprintf(' %-10s %-15s %-3s' . NL, '#' . strval(intval($client['socket'])), $client['ip'], ($client['privileged'] ? 'yes' : 'no'));
+				foreach ($rrdp_admin_clients as $socket_resource_id => $client) {
+					$output .= sprintf(' %-10s %-15s %-3s' . NL, '#' . strval($socket_resource_id), $client['ip'], ($client['privileged'] ? 'yes' : 'no'));
 				}
 				break;
 
@@ -1580,19 +1594,19 @@ function rrdp_cmd__debug($socket, $args) {
 	global $rrdp_replicator_pid, $rrdp_admin_clients, $rrdp_help_messages, $rrdp_config, $rrdp_clients, $rrdp_ipc_sockets;
 
 	if (__sizeof($args) == 2) {
-		$i = intval($socket);
-		if (isset($rrdp_help_messages['debug']['?'][intval($rrdp_admin_clients[$i]['privileged'])][$args[0]])) {
+		$socket_resource_id = rrdp_system__get_resource_id($socket);
+		if (isset($rrdp_help_messages['debug']['?'][intval($rrdp_admin_clients[$socket_resource_id]['privileged'])][$args[0]])) {
 			$process = $args[0];
 			switch($args[1]) {
 				case 'on' :
-					$rrdp_admin_clients[$i]['debug'][$process] = true;
+					$rrdp_admin_clients[$socket_resource_id]['debug'][$process] = true;
 					$original_state = isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true;
 					$rrdp_config['debug'][$process] = true;
 
 					if ($process == 'replicator') {
 						if ($rrdp_replicator_pid) {
 							$key = $rrdp_clients[$rrdp_replicator_pid]['ipc'];
-							if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+							if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 								@socket_write($rrdp_ipc_sockets[$key][1], 'debug_on' . NL);
 							}
 						}
@@ -1603,7 +1617,7 @@ function rrdp_cmd__debug($socket, $args) {
 					}
 					break;
 				case 'off' :
-					unset($rrdp_admin_clients[$i]['debug'][$process]);
+					unset($rrdp_admin_clients[$socket_resource_id]['debug'][$process]);
 					$original_state = isset($rrdp_config['debug'][$process]) && $rrdp_config['debug'][$process] === true;
 
 					$debug_sessions_running = false;
@@ -1617,7 +1631,7 @@ function rrdp_cmd__debug($socket, $args) {
 					if ($process == 'replicator') {
 						if ($rrdp_replicator_pid) {
 							$key = $rrdp_clients[$rrdp_replicator_pid]['ipc'];
-							if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+							if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 								@socket_write($rrdp_ipc_sockets[$key][1], 'debug_off' . NL);
 							}
 						}
@@ -1640,7 +1654,6 @@ function rrdp_cmd__debug($socket, $args) {
 	} else {
 		rrdp_system__socket_write($socket, '% Unrecognized command' . NL);
 	}
-	return;
 }
 
 function rrdp_cmd__set($socket, $args) {
@@ -1667,7 +1680,7 @@ function rrdp_cmd__set_cluster($socket, $args) {
 
 					/* Verify IP address */
 					if (filter_var($args[0], FILTER_VALIDATE_IP) === false) {
-						rrdp_system__socket_write($socket, '% Invalid IP adress' . NL);
+						rrdp_system__socket_write($socket, '% Invalid IP address' . NL);
 						break;
 					}
 
@@ -1694,11 +1707,11 @@ function rrdp_cmd__set_cluster($socket, $args) {
 
 					/* inform replication processes */
 					$key = $rrdp_clients[$rrdp_repl_master_pid]['ipc'];
-					if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+					if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 						@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 					}
 					$key = $rrdp_clients[$rrdp_repl_slave_pid]['ipc'];
-					if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+					if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 						@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 					}
 
@@ -1717,11 +1730,11 @@ function rrdp_cmd__set_cluster($socket, $args) {
 
 						/* inform replication processes */
 						$key = $rrdp_clients[$rrdp_repl_master_pid]['ipc'];
-						if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+						if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 							@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 						}
 						$key = $rrdp_clients[$rrdp_repl_slave_pid]['ipc'];
-						if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+						if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 							@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 						}
 
@@ -1750,11 +1763,11 @@ function rrdp_cmd__set_cluster($socket, $args) {
 
 						/* inform replication processes */
 						$key = $rrdp_clients[$rrdp_repl_master_pid]['ipc'];
-						if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+						if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 							@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 						}
 						$key = $rrdp_clients[$rrdp_repl_slave_pid]['ipc'];
-						if (isset($rrdp_ipc_sockets[$key]) && is_resource($rrdp_ipc_sockets[$key][1])) {
+						if (isset($rrdp_ipc_sockets[$key]) && rrdp_system__is_resource($rrdp_ipc_sockets[$key][1])) {
 							@socket_write($rrdp_ipc_sockets[$key][1], serialize(array('type' => 'reload_proxy_list')) . NL);
 						}
 
@@ -1873,6 +1886,7 @@ function rrdp_cmd__set_rsa($socket, $args) {
 function rrdp_cmd__set_logging($socket, $args) {
 	global $rrdp_config, $rrdp_admin_clients, $logging_categories;
 
+	$socket_resource_id = rrdp_system__get_resource_id($socket);
 	$arg = array_shift($args);
 	if ( !is_null($arg) ) {
 		switch($arg) {
@@ -1893,7 +1907,7 @@ function rrdp_cmd__set_logging($socket, $args) {
 					$level = array_shift($args);
 					if (is_numeric($level) && in_array($level, (($arg == 'terminal' | $arg == 'console') ? range(0,8) : range(0,7)) ) ) {
 						if ($arg == 'console') {
-							$rrdp_admin_clients[intval($socket)]['logging_severity_console'] = $level;
+							$rrdp_admin_clients[$socket_resource_id]['logging_severity_console'] = $level;
 							rrdp_system__global_console_logging_update();
 						} else {
 							$rrdp_config['logging_severity_' . $arg] = $level;
@@ -1926,7 +1940,7 @@ function rrdp_cmd__set_logging($socket, $args) {
 							$selected_categories = implode(',', $selected_categories);
 						}
 						if ($arg == 'console') {
-							$rrdp_admin_clients[intval($socket)]['logging_category_console'] = $selected_categories;
+							$rrdp_admin_clients[$socket_resource_id]['logging_category_console'] = $selected_categories;
 							rrdp_system__global_console_logging_update();
 						} else {
 							$rrdp_config['logging_category_terminal'] = $selected_categories;
@@ -1947,7 +1961,6 @@ function rrdp_cmd__set_logging($socket, $args) {
 	} else {
 		rrdp_system__socket_write($socket, '% Type "set logging ?" for a list of subcommands' . NL);
 	}
-	return;
 }
 
 
@@ -1963,7 +1976,7 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 	GLOBAL $__server_listening, $rrdp_status, $rrdcached_pid, $ipc_global_resource_id, $debug_category, $c_pid;
 
 	list($ipc_socket_parent, $ipc_socket_child) = $ipc_sockets;
-	$ipc_global_resource_id = intval($ipc_socket_child);
+	$ipc_global_resource_id = rrdp_system__get_resource_id($ipc_socket_child);
 
 	$pid = pcntl_fork();
 
@@ -2002,7 +2015,7 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 		$__server_listening = false;
 
 		/* free up unused resources */
-		if (is_resource($ssock)) socket_close($ssock);
+		if (rrdp_system__is_resource($ssock)) socket_close($ssock);
 		socket_close($ipc_socket_child);
 
 		/* get my own process id */
@@ -2017,14 +2030,14 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 		/* handle client parent and child communication */
 		interact($arg1);
 
+		/* send final IPC update message to parent */
+		socket_write($ipc_socket_parent, serialize($rrdp_status));
+
 		/* close client connection if existing*/
-		if (is_resource($arg1)) {
+		if (rrdp_system__is_resource($arg1)) {
 			socket_shutdown($arg1); ####check
 			socket_close($arg1);
 		}
-
-		/* send IPC update message to parent */
-		socket_write($ipc_socket_parent, serialize($rrdp_status));
 
 		/* shutdown connection to parent */
 		socket_shutdown($ipc_socket_parent);
@@ -2038,7 +2051,7 @@ function handle_child_processes($ipc_sockets, $type, $ssock=false, $arg1=false) 
 
 		/* free up unused resources */
 		socket_close($ipc_socket_parent);
-		if (is_resource($arg1)) socket_close($arg1);
+		if (rrdp_system__is_resource($arg1)) socket_close($arg1);
 
 		/* return child's process identifier */
 		return $pid;

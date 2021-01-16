@@ -56,6 +56,9 @@ function interact($socket_client) {
 	socket_set_block ($socket_client);
 	socket_set_block ($ipc_socket_parent);
 
+	$real_client_resource_id = rrdp_system__get_resource_id($socket_client);
+	$ipc_parent_resource_id = rrdp_system__get_resource_id($ipc_socket_parent);
+
 	/* enable message encryption */
 	$rsa = new RSA();
 
@@ -82,7 +85,9 @@ function interact($socket_client) {
 
 		if ($ready > 0) {
 			foreach($read as $read_socket_index => $read_socket) {
-				if ($read_socket == $socket_client) {
+				$socket_resource_id = rrdp_system__get_resource_id($read_socket);
+
+				if ($socket_resource_id == $real_client_resource_id) {
 					/* RRDtool client is talking to us */
 
 					while(1) {
@@ -193,7 +198,7 @@ function interact($socket_client) {
 													list($mtime,$time) = explode(' ',microtime());
 													$offset = $time %10;
 													$block = $time - $offset + 10;
-													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . intval($read_socket)] = $cmd . ' ' . $cmd_options;
+													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . $socket_resource_id] = $cmd . ' ' . $cmd_options;
 													if (__sizeof($rrdp_status['msr_commands'])>1 | $time >= $block)  {
 														$msr_block = key($rrdp_status['msr_commands']);
 														$msr_message['type'] = 'msr';
@@ -378,7 +383,7 @@ function interact($socket_client) {
 													list($mtime,$time) = explode(' ',microtime());
 													$offset = $time %10;
 													$block = $time - $offset + 10;
-													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . intval($read_socket)] = $cmd . ' ' . $cmd_options;
+													$rrdp_status['msr_commands'][$block][$offset+$mtime . '_' . $socket_resource_id] = $cmd . ' ' . $cmd_options;
 													if (__sizeof($rrdp_status['msr_commands'])>1 | $time >= $block )  {
 														$msr_block = key($rrdp_status['msr_commands']);
 														$msr_message['type'] = 'msr';
@@ -405,7 +410,7 @@ function interact($socket_client) {
 							}
 						}
 					}
-				} elseif ($read_socket == $ipc_socket_parent) {
+				} elseif ($socket_resource_id == $ipc_parent_resource_id) {
 					/* RRDtool proxy is talking to us */
 
 					while(1) {
@@ -456,6 +461,5 @@ function interact($socket_client) {
 		rrdtool_pipe_close($rrdtool_process);
 	}
 
-	return;
 }
 
