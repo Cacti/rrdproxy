@@ -325,7 +325,7 @@ if ($systemd) {
 	file_put_contents('./run/rrdtool-proxy.pid', posix_getpid());
 }
 /* ---------------------------- END - SYSTEM STARTUP ROUTINE ---------------------------- */
-$bla = 1;
+
 while ($__server_listening) {
 
 	$write = array();

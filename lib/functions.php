@@ -88,7 +88,7 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 
 					__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . RRD_OK . ', payload: ' . $buffer_length_new . ' Bytes, compression: on , ratio: ' . round(($buffer_length/$buffer_length_new),2) . ' , packets: ' . $packets, 'IPC', SEVERITY_LEVEL_DEBUG);
 				} else {
-					if (is_resource($socket) === true) {
+					if (rrdp_system__is_resource($socket) === true) {
 						$buffer_length = strlen($buffer);
 
 						rrdp_system__socket_write( $socket, encrypt( $buffer, $client_public_key) . $terminator); $packets++;
@@ -105,7 +105,7 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 			return true;
 		} elseif ( substr_count($buffer, "ERROR") ) {
 			if (!$silent_mode) {
-				if (is_resource($socket) === true) {
+				if (rrdp_system__is_resource($socket) === true) {
 					__logging(LOGGING_LOCATION_BUFFERED, $buffer, 'IPC', SEVERITY_LEVEL_DEBUG);
 
 					rrdp_system__socket_write( $socket, encrypt( ( ($compression === true) ? gzencode($buffer,1) : $buffer ), $client_public_key) . $terminator);
@@ -116,7 +116,7 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 
             return false;
 		} else {
-			if (strlen($buffer) <= $max_buffer_size | is_resource($socket) === false ) {
+			if (strlen($buffer) <= $max_buffer_size | rrdp_system__is_resource($socket) === false ) {
 				continue;
 			} else {
 				if (!$silent_mode) {
