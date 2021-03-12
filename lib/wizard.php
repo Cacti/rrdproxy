@@ -587,7 +587,7 @@ function wizard() {
 			break;
 		} elseif ($input == 'Y') {
 			$client_ip = wizard_handle_input('IP:', FILTER_VALIDATE_IP, false, '% Invalid IPv4 or IPv6 address format');
-			$client_fingerprint =  wizard_handle_input('Fingerprint:', FILTER_VALIDATE_REGEXP, array('options'=>array('regexp'=>'/^([a-z0-9]{2}:) {15}([a-z0-9]{2})$/')), '% Invalid Fingerprint [expected: xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx]');
+			$client_fingerprint =  wizard_handle_input('Fingerprint:', FILTER_VALIDATE_REGEXP, array('options'=>array('regexp'=>'/^([a-z0-9]{2}:){15}([a-z0-9]{2})$/')), '% Invalid Fingerprint [expected: xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx]');
 			$rrdp_remote_clients[$client_ip] = $client_fingerprint;
 		}
 	}
@@ -654,7 +654,7 @@ function wizard() {
 		} elseif ($input == 'Y') {
 			$client_ip = wizard_handle_input('IP:', FILTER_VALIDATE_IP, false, '% Invalid IPv4 or IPv6 address format');
 			$client_port = wizard_handle_input('PORT:', FILTER_VALIDATE_REGEXP, array('options'=>array('regexp'=>'/^$|^(102[4-9]|10[3-9]\d|1[1-9]\d{2}|[2-9]\d{3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$/')), '% Invalid PORT. Range: [1024-65535]');
-			$client_fingerprint =  wizard_handle_input('Fingerprint:', FILTER_VALIDATE_REGEXP, array('options'=>array('regexp'=>'/^([a-z0-9]{2}:) {15}([a-z0-9]{2})$/')), '% Invalid Fingerprint [expected: xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx]');
+			$client_fingerprint =  wizard_handle_input('Fingerprint:', FILTER_VALIDATE_REGEXP, array('options'=>array('regexp'=>'/^([a-z0-9]{2}:){15}([a-z0-9]{2})$/')), '% Invalid Fingerprint [expected: xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx]');
 			$rrdp_remote_proxies[$client_ip] = array('port' => $client_port, 'fingerprint' => $client_fingerprint);
 		}
 	}
