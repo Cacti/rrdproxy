@@ -1689,7 +1689,7 @@ function rrdp_cmd__set_cluster($socket, $args) {
 						break;
 					}
 
-					if (filter_var($args[2], FILTER_VALIDATE_REGEXP, array('options' => array('regexp' => '/^([a-z0-9]{2}:) {15}([a-z0-9]{2})$/'))) === false) {
+					if (filter_var($args[2], FILTER_VALIDATE_REGEXP, array('options' => array('regexp' => '/^([a-z0-9]{2}:){15}([a-z0-9]{2})$/'))) === false) {
 						rrdp_system__socket_write($socket, '% Invalid Fingerprint [expected: xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx]' . NL);
 						break;
 					}
@@ -1810,7 +1810,7 @@ function rrdp_cmd__set_client($socket, $args) {
 
 					/* Verify Fingerprint Format */
 					$fingerprint = trim($args[1]);
-					preg_match_all('/^([a-z0-9]{2}:) {15}([a-z0-9]{2})$/', $args[1], $output_array);
+					preg_match_all('/^([a-z0-9]{2}:){15}([a-z0-9]{2})$/', $args[1], $output_array);
 
 					if (isset($output_array[0][0]) && $output_array[0][0] == $args[1]) {
 						/* if the client IP has already been defined, then overwrite its fingerprint */
