@@ -160,7 +160,10 @@ function interact($socket_client) {
 											$transaction = gzdecode($transaction);
 										}
 
-										if (strpos($transaction, ' ') !== false) {
+										/* take care of invalid blanks */
+										$transaction = trim($transaction);
+
+										if (strpos($transaction, ' ') != false) {
 											$options = explode(' ', $transaction, 2);
 											$cmd = $options[0];
 											$cmd_options = $options[1];
