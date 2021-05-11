@@ -1,3 +1,9 @@
 .git*
 
 locales/po/*.mo
+
+*.key
+include/config
+include/clients
+include/proxies
+include/clients
