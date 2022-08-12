@@ -832,7 +832,7 @@ function wizard_handle_settings($inputs, &$active_config, &$attribute_count, $ti
 		$title .= ' ';
 	}
 
-	wizard_handle_output( PHP_EOL . PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - ${title}Settings:" . ANSI_RESET . PHP_EOL);
+	wizard_handle_output( PHP_EOL . PHP_EOL . ANSI_BOLD . "RRDtool Proxy Server - {$title}Settings:" . ANSI_RESET . PHP_EOL);
 
 	foreach( $active_config as $attribute => $value) {
 		if (isset($inputs[$attribute])) {
