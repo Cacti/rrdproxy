@@ -329,11 +329,16 @@ function interact($socket_client) {
 													break;
 												case 'file_exists':
 												case 'is_dir':
-												case 'mkdir':
 													$rrdp_exec_status = call_user_func_array($cmd, $options);
 													rrdp_system__socket_write($socket_client, encrypt( ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR , $client_public_key) . $end_of_sequence);
 													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), 'IPC', SEVERITY_LEVEL_DEBUG);
-
+													break;
+												case 'mkdir':
+													$options[1] = 0700;
+													$options[2] = TRUE;
+													$rrdp_exec_status = call_user_func_array($cmd, $options);
+													rrdp_system__socket_write($socket_client, encrypt( ($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR , $client_public_key) . $end_of_sequence);
+													__logging(LOGGING_LOCATION_BUFFERED, 'RESPONSE: ' . (($rrdp_exec_status === true) ? RRD_OK : RRD_ERROR), 'IPC', SEVERITY_LEVEL_DEBUG);
 													break;
 												case 'archive':
 													if (__sizeof($options) == 1 && (substr($options[0],-3) == 'rrd') && file_exists($options[0]) && $rrdp_config['path_rra_archive']) {
