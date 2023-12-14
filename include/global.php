@@ -296,7 +296,7 @@ $rrdp_help_messages = array(
                                 'info' => 'Set LOCAL terminal logging severity level (default:0) and categories (default: none)',
                                 '?' => array(
                                     'level' => array(
-                                        'info' 	=> 'Numerical repesentation of the severity level [0-8]',
+                                        'info' 	=> 'Numerical representation of the severity level [0-8]',
                                         '?'		=> $severity_levels
                                     ),
                                     'category' => array(
@@ -309,7 +309,7 @@ $rrdp_help_messages = array(
                                 'info' => 'Set LOCAL terminal logging severity level (default:0) and categories',
                                 '?' => array(
                                     'level' => array(
-                                        'info' 	=> 'Numerical repesentation of the severity level [0-8]',
+                                        'info' 	=> 'Numerical representation of the severity level [0-8]',
                                         '?'		=> $severity_levels
                                     ),
                                     'category' => array(

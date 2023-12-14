@@ -1804,7 +1804,7 @@ function rrdp_cmd__set_client($socket, $args) {
 
 					/* Verify IP address */
 					if (filter_var($args[0], FILTER_VALIDATE_IP) === false) {
-						rrdp_system__socket_write($socket, '% Invalid IP adress' . NL);
+						rrdp_system__socket_write($socket, '% Invalid IP address' . NL);
 						break;
 					}
 

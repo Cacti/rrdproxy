@@ -136,7 +136,7 @@ foreach($parms as $parameter) {
                 $outliers = $value;
 
                 if (!is_numeric($outliers) || ($outliers < 1)) {
-                        echo "FATAL: The number of outliers to exlude must be a positive integer.\n\n";
+                        echo "FATAL: The number of outliers to exclude must be a positive integer.\n\n";
                         display_help();
                         exit(-6);
                 }
@@ -581,7 +581,7 @@ function calculateOverallStatistics(&$rra, &$samples) {
                                         }
 
                                         if ($rra[$rra_num][$ds_num]["variance_avg"] == "NAN") {
-                                                /* not enought samples to calculate */
+                                                /* not enough samples to calculate */
                                         }else if ($sample > ($rra[$rra_num][$ds_num]["variance_avg"] * (1+$percent))) {
                                                 /* kill based upon variance */
                                                 debug(sprintf("Var Kill: Value '%.4e', VarianceDev '%.4e', VarianceLimit '%.4e'", $sample, $rra[$rra_num][$ds_num]["variance_avg"], ($rra[$rra_num][$ds_num]["variance_avg"] * (1+$percent))));
