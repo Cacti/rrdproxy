@@ -3,7 +3,7 @@
 /*
  ex: set tabstop=4 shiftwidth=4 autoindent:
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2009 The Cacti Group                                 |
+ | Copyright (C) 2004-2024 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -866,7 +866,7 @@ function display_help () {
                 $version = "v1.1";
         }
 
-        echo "Cacti Spike Remover " . ($using_cacti ? "v" . $version["version"] : $version) . ", Copyright 2009, The Cacti Group, Inc.\n\n";
+        echo "Cacti Spike Remover " . ($using_cacti ? "v" . $version["version"] : $version) . ", Copyright 2024, The Cacti Group, Inc.\n\n";
         echo "Usage:\n";
         echo "removespikes.php -R|--rrdfile=rrdfile [-M|--method=stddev] [-A|--avgnan] [-S|--stddev=N]\n";
         echo "                 [-P|--percent=N] [-N|--number=N] [-D|--dryrun] [-d|--debug]\n";
