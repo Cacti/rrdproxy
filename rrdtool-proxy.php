@@ -180,15 +180,6 @@ require_once('./include/config');
 @include_once('./include/clients');
 @include_once('./include/proxies');
 
-// include external libraries
-// set_include_path('./include/phpseclib/');
-// require_once('Math/BigInteger.php');
-// require_once('Crypt/Base.php');
-// require_once('Crypt/Hash.php');
-// require_once('Crypt/Random.php');
-// require_once('Crypt/RSA.php');
-// require_once('Crypt/Rijndael.php');
-
 // install signal handler
 pcntl_signal(SIGHUP, 'rrdp_sig_handler');
 pcntl_signal(SIGTERM, 'rrdp_sig_handler');
@@ -824,10 +815,9 @@ function rrdp_system__check() {
 function rrdp_system__encryption_init() {
 	global $rrdp_config;
 
-	$rsa = new phpseclib3\Crypt\RSA();
 
 	if (!file_exists('./include/public.key') || !file_exists('./include/private.key')) {
-		$private = $rsa->createKey(2048);
+		$private = RSA::createKey(2048);
 		$public  = $private->getPublicKey();
 
 		$rrdp_config['encryption']['public_key']  = $public;
@@ -843,8 +833,8 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['private_key'] = file_get_contents('./include/private.key');
 	rrd_system__system_boolean_message('init: RSA private key', $rrdp_config['encryption']['private_key'], true);
 
-	$rsa->loadPublicKey($rrdp_config['encryption']['public_key']);
-	$rrdp_config['encryption']['public_key_fingerprint'] = $rsa->getFingerprint();
+	$private = RSA::loadPublicKey($rrdp_config['encryption']['public_key']);
+	$rrdp_config['encryption']['public_key_fingerprint'] = $private->getFingerprint();
 }
 
 function rrdp_system__replicator($input) {
