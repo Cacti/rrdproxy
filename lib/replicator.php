@@ -367,7 +367,7 @@ function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 		// read public key being returned by the proxy server
 		$rrdp_public_key = '';
 
-		while (1) {
+		while (true) {
 			$recv = socket_read($rrdp_socket, 1000, PHP_BINARY_READ);
 
 			if ($recv === false) {
@@ -450,8 +450,9 @@ function __remote_read($read_socket) {
 
 					if ($first_packet) {
 						[$cmd, $status, $payload] = explode(' ', $packet, 3);
-						$first_packet             = false;
-						$packet                   = $payload;
+
+						$first_packet = false;
+						$packet       = $payload;
 					}
 
 					if (substr_count($packet, 'END_OF_MSG')) {
@@ -459,9 +460,7 @@ function __remote_read($read_socket) {
 
 						$rrdp_remoteproxies[$index]['last_seen'] = time();
 
-						return [ $cmd, $status, $payload];
-
-						break 2;	// superfluous
+						return [$cmd, $status, $payload];
 					}
 
 					if (!$first_packet) {
@@ -485,8 +484,9 @@ function handle__request($input, $read_socket) {
 	$type        = $options[0];
 	$cmd_options = isset($options[1]) ? explode(' ', $options[1]) : false;
 
-	$index		    = intval($read_socket);
-	$ip 		      = $rrdp_remoteproxies[$index]['ip'];
+	$index = intval($read_socket);
+	$ip    = $rrdp_remoteproxies[$index]['ip'];
+
 	$public_key = $rrdp_remoteproxies[$index]['public_key'];
 
 	switch($type) {
@@ -649,13 +649,14 @@ function handle__request($input, $read_socket) {
 						foreach ($scan as $line) {
 							$file_settings = explode(',', $line);
 
-							$folder 	    = $file_settings[0];
-							$file 		     = $file_settings[1];
-							$file_size 	 = $file_settings[2];
-							$mtime 		    = $file_settings[3];
+							$folder    = $file_settings[0];
+							$file      = $file_settings[1];
+							$file_size = $file_settings[2];
+							$mtime     = $file_settings[3];
 
 							if ($folder != './') {
-								$rra_subfolder          = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($folder, './');
+								$rra_subfolder = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($folder, './');
+
 								$rra_file_path_absolute = $rra_subfolder . '/' . $file;
 
 								// create subfolder if not already existing
@@ -692,7 +693,9 @@ function handle__request($input, $read_socket) {
 									if (substr_count($response[2], 'OK u')) {
 										[$payload,$mtime] = explode(':__filemtime__:', $response[2]);
 										$rrd_data         = substr($payload, 0, strpos($payload, 'OK u'));
+
 										file_put_contents($rra_file_path_absolute . '.xml', $rrd_data);
+
 										$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $folder . '/' . $file . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 										if ($rrd_exec_status) {
@@ -779,7 +782,8 @@ function handle__request($input, $read_socket) {
 
 				if (file_exists($rra_path_absolute)) {
 					if ($rrdcached_pid) {
-						$rrd_cmd         = 'flushcached ' . $cmd_options[0];
+						$rrd_cmd = 'flushcached ' . $cmd_options[0];
+
 						$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 						if (!$rrd_exec_status) {
@@ -854,5 +858,3 @@ function handle__request($input, $read_socket) {
 			break;
 	}
 }
-
-?>
