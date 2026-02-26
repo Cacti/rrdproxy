@@ -1,6 +1,7 @@
 .git*
 
 locales/po/*.mo
+vendor/**
 
 *.key
 include/config

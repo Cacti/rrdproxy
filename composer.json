@@ -1,0 +1,85 @@
+{
+    "_comment": [
+        "+-------------------------------------------------------------------------+",
+        "| Copyright (C) 2004-2026 The Cacti Group                                 |",
+        "|                                                                         |",
+        "| This program is free software; you can redistribute it and/or           |",
+        "| modify it under the terms of the GNU General Public License             |",
+        "| as published by the Free Software Foundation; either version 2          |",
+        "| of the License, or (at your option) any later version.                  |",
+        "|                                                                         |",
+        "| This program is distributed in the hope that it will be useful,         |",
+        "| but WITHOUT ANY WARRANTY; without even the implied warranty of          |",
+        "| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           |",
+        "| GNU General Public License for more details.                            |",
+        "+-------------------------------------------------------------------------+",
+        "| Cacti: The Complete RRDtool-based Graphing Solution                     |",
+        "+-------------------------------------------------------------------------+",
+        "| This code is designed, written, and maintained by the Cacti Group. See  |",
+        "| about.php and/or the AUTHORS file for specific developer information.   |",
+        "+-------------------------------------------------------------------------+",
+        "| http://www.cacti.net/                                                   |",
+        "+-------------------------------------------------------------------------+"
+    ],
+    "name": "cacti/rrdproxy",
+    "description": "Cacti Network Monitoring Framework",
+    "type": "composer-plugin",
+    "license": "GPL-2.0-only",
+    "require": {
+        "php": "^8.1",
+        "ext-PDO": "*",
+        "ext-Phar": "*",
+        "ext-dom": "*",
+        "ext-gd": "*",
+        "ext-gmp": "*",
+        "ext-intl": "*",
+        "ext-json": "*",
+        "ext-ldap": "*",
+        "ext-mbstring": "*",
+        "ext-mysqlnd": "*",
+        "ext-openssl": "*",
+        "ext-pcntl": "*",
+        "ext-pdo_mysql": "*",
+        "ext-posix": "*",
+        "ext-sockets": "*",
+        "ext-sqlite3": "*",
+        "ext-xml": "*",
+        "pear/net_dns2": "^2.0",
+        "phpseclib/phpseclib": "^3.0"
+    },
+    "suggest": {
+        "friendsofphp/php-cs-fixer": "^3.13"
+    },
+    "authors": [
+        {
+            "name": "The Cacti Group",
+            "email": "developers@cacti.net"
+        }
+    ],
+    "funding": [
+        {
+            "url": "https://github.com/sponsors/Cacti",
+            "type": "github"
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+		"vendor-dir": "vendor",
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "lint": "phplint --no-cache --exclude=vendor",
+        "phpstan": "phpstan analyse --level 6 ",
+        "phpcsfixer": "php-cs-fixer fix --allow-unsupported-php-version=yes --dry-run --diff --config=./.php-cs-fixer.php ",
+        "phpcsfixit": "php-cs-fixer fix "
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.86",
+        "overtrue/phplint": "^9.6",
+        "phpstan/phpstan": "^2.1"
+    }
+}
