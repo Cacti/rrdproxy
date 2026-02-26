@@ -189,7 +189,7 @@ function decrypt($input) {
 
 		$aes_key_length = hexdec(substr($input,0,3));
 		$aes_key        = base64_decode(substr($input,3,$aes_key_length), true);
-		$ciphertext     = base64_decode(substr($input,3 + $aes_key_length), true);
+		$ciphertext     = base64_decode(substr($input,3+$aes_key_length), true);
 
 		$rsa->loadKey($rrdp_config['encryption']['private_key']);
 		$aes_key = $rsa->decrypt($aes_key);
