@@ -61,18 +61,9 @@ $active_config = [
 wizard();
 
 function wizard() {
-	define('WIZARD_RUNNING', 1);
-
 	global $microtime_start, $active_config;
 
-	// include external libraries
-//	set_include_path('./include/phpseclib/');
-//	require_once('Math/BigInteger.php');
-//	require_once('Crypt/Base.php');
-//	require_once('Crypt/Hash.php');
-//	require_once('Crypt/Random.php');
-//	require_once('Crypt/RSA.php');
-//	require_once('Crypt/Rijndael.php');
+	define('WIZARD_RUNNING', 1);
 
 	// ### -- WELCOME -- ####
 	wizard_handle_title(1, 'Welcome');
