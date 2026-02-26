@@ -43,10 +43,11 @@ require_once('./lib/functions.php');
 $parms = $_SERVER['argv'];
 array_shift($parms);
 
-$microtime_start	 = microtime(true);
-$systemd			       = false;
-$wizard 			       = false;
-$force 				       = false;
+$microtime_start = microtime(true);
+
+$systemd = false;
+$wizard  = false;
+$force   = false;
 
 if (__sizeof($parms) != 0) {
 	foreach ($parms as $parameter) {
