@@ -26,32 +26,30 @@ Get involved in development by participating in active development on
 
 RRDtool Proxy Server runs on any Unix-based operating system that can meet the
 minimum requirements, though it will perform better with the recommended (or
-higher).
+higher).  The most recent version of RRDProxy requires composer
 
 ### Minimum Requirements
 
-- PHP Version 7.2 or higher
+- PHP Version 8.1 or higher
+
   Installation must include and enable the following modules:
 
   - Sockets
-
   - Posix
-
   - PCntl
-
   - GMP
-
   - ZLIB
 
 - RRDtool Version 1.5 or higher
 
-- Cacti Version 1.2.7 or higher
+- Cacti Version 1.2.31 or higher
 
 ### Recommended Requirements
 
 All minimum requirements must be met, though the following are more optional:
 
-- PHP Version 7.3 or higher
+- PHP Version 8.1 or higher
+
   Include all minimum recommendation modules
 
 - RRDtool 1.7 or higher
@@ -64,6 +62,8 @@ Before using the RRDtool Proxy Server, you must install the system using the
 setup wizard which can be run at any point using the -w parameter.
 
 ```shell
+ composer install --no-dev
+
  php rrdtool-proxy.php --help
 
  RRDtool Proxy v1.2.17
