@@ -2002,8 +2002,8 @@ function rrdp_cmd__set_rsa($socket, $args) {
 				file_put_contents('./include/public.key', $rrdp_config['encryption']['public_key']);
 				file_put_contents('./include/private.key', $rrdp_config['encryption']['private_key']);
 
-				$rsa->loadPulicKey($rrdp_config['encryption']['public_key']);
-				$rrdp_config['encryption']['public_key_fingerprint'] = $rsa->getFingerprint();
+				$public_key = $rsa->loadPublicKey($rrdp_config['encryption']['public_key']);
+				$rrdp_config['encryption']['public_key_fingerprint'] = $public_key->getFingerprint();
 
 				rrdp_cmd__show($socket, [ 0=>'rsa', 1=>'publickey']);
 
