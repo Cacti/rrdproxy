@@ -3,10 +3,18 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     target-branch: develop
-    schedule: {interval: weekly, day: friday}
+    schedule:
+      interval: weekly
+      day: friday
     open-pull-requests-limit: 5
-    cooldown: {default-days: 7}
+    cooldown:
+      default-days: 7
     groups:
-      github-actions: {patterns: ["*"]}
-    labels: [dependencies, github-actions]
-    commit-message: {prefix: ci, include: scope}
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+    commit-message:
+      prefix: ci
+      include: scope
