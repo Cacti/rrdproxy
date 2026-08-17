@@ -38,6 +38,7 @@ chdir(__DIR__);
 require_once('./vendor/autoload.php');
 require_once('./include/global.php');
 require_once('./lib/functions.php');
+$rrdp_help_messages = $rrdp_help_messages ?? [];
 
 // process calling arguments
 $parms = $_SERVER['argv'];
@@ -213,7 +214,8 @@ $rrdp_msr_buffer    = [];
 $rrdp_buffers       = ['logging_buffered' => [], 'logging_snmp' => [] ];
 
 // set up an admin socket for proxy administration
-$rrdp_admin = @socket_create(($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6 , SOCK_STREAM, SOL_TCP);
+$rrdp_admin_resource_id = 0;
+$rrdp_admin             = @socket_create(($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6 , SOCK_STREAM, SOL_TCP);
 
 if ($rrdp_admin === false) {
 	rrd_system__system_die(NL . 'Unable to create socket. Error: ' . socket_strerror(socket_last_error()) . NL);
@@ -222,7 +224,7 @@ if ($rrdp_admin === false) {
 }
 @socket_set_option($rrdp_admin, SOL_SOCKET, SO_REUSEADDR, 1);
 
-if (!@socket_bind($rrdp_admin, (($rrdp_config['ipv6']) ? '::1' : '127.0.0.1'), $rrdp_config['port_admin'])) {
+if (!@socket_bind($rrdp_admin, (($rrdp_config['ip_version'] == 6) ? '::1' : '127.0.0.1'), $rrdp_config['port_admin'])) {
 	rrd_system__system_die(NL . 'Unable to bind socket to \'' . $rrdp_config['address'] . ':' . $rrdp_config['port_admin'] . '\'' . NL . 'Error: ' . socket_strerror(socket_last_error()) . NL);
 }
 socket_set_nonblock($rrdp_admin);
@@ -231,7 +233,8 @@ rrd_system__system_boolean_message('init: tcp admin socket #' . $rrdp_admin_reso
 rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Start listening to port ' . $rrdp_config['address'] . ':' . $rrdp_config['port_admin'], 'SYS', SEVERITY_LEVEL_NOTIFICATION);
 
 // set up a client socket handling requests against RRDtool
-$rrdp_client = @socket_create((($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6), SOCK_STREAM, SOL_TCP);
+$rrdp_client_resource_id = 0;
+$rrdp_client             = @socket_create((($rrdp_config['ip_version'] == 4) ? AF_INET : AF_INET6), SOCK_STREAM, SOL_TCP);
 
 if ($rrdp_client === false) {
 	rrd_system__system_die(NL . 'Unable to create socket. Error: ' . socket_strerror(socket_last_error()) . NL);
@@ -318,7 +321,7 @@ exec("ls -l /proc/$pid_of_php/fd/ | wc -l", $open_files);
 if ($max_open_files[0] == 'unlimited') {
 	$max_open_files[0] = 1048576;
 }
-$rrdp_config['max_cnn'] = intval(($max_open_files[0] - $open_files[0]) / 2 - $rrdp_config['max_admin_cnn'] * 2 - 100); // use a buffer of 100 open files
+$rrdp_config['max_cnn'] = intval(((int) $max_open_files[0] - (int) $open_files[0]) / 2 - (int) $rrdp_config['max_admin_cnn'] * 2 - 100); // use a buffer of 100 open files
 
 // return system info
 fwrite(STDOUT, rrdp_cmd__show_version($systemd) . NL);
@@ -679,8 +682,9 @@ while ($__server_listening) {
 						// return prompt
 						rrdp_system__return_prompt($read_socket);
 					} else {
-						socket_close($rrdp_admin_client['socket']);
+						socket_close($read_socket);
 						unset($rrdp_admin_clients[$read_socket_resource_id]);
+						unset($rrdp_admin_sockets[$read_socket_resource_id]);
 						rrdp_system__count('aborted_clients');
 
 						continue;
@@ -816,7 +820,6 @@ function rrdp_system__check() {
 function rrdp_system__encryption_init() {
 	global $rrdp_config;
 
-
 	if (!file_exists('./include/public.key') || !file_exists('./include/private.key')) {
 		$private = RSA::createKey(2048);
 		$public  = $private->getPublicKey();
@@ -824,9 +827,10 @@ function rrdp_system__encryption_init() {
 		$rrdp_config['encryption']['public_key']  = $public;
 		$rrdp_config['encryption']['private_key'] = $private;
 
-		file_put_contents('./include/public.key', $rrdp_config['encryption']['public_key']);
-		file_put_contents('./include/private.key', $rrdp_config['encryption']['private_key']);
+		$keys_written = rrdp_write_key_pair('./include/public.key', (string) $public, './include/private.key', (string) $private);
+		rrd_system__system_boolean_message('init: write RSA key pair', $keys_written, true);
 	}
+	@chmod('./include/private.key', 0600);
 
 	$rrdp_config['encryption']['public_key'] = file_get_contents('./include/public.key');
 	rrd_system__system_boolean_message('init: RSA public key', $rrdp_config['encryption']['public_key'], true);
@@ -834,8 +838,8 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['private_key'] = file_get_contents('./include/private.key');
 	rrd_system__system_boolean_message('init: RSA private key', $rrdp_config['encryption']['private_key'], true);
 
-	$private = RSA::loadPublicKey($rrdp_config['encryption']['public_key']);
-	$rrdp_config['encryption']['public_key_fingerprint'] = $private->getFingerprint();
+	$private                                             = RSA::loadPublicKey($rrdp_config['encryption']['public_key']);
+	$rrdp_config['encryption']['public_key_fingerprint'] = $private->getFingerprint('md5');
 }
 
 function rrdp_system__replicator($input) {
@@ -1004,13 +1008,17 @@ function rrdp_system__return_prompt($socket) {
 }
 
 function rrdp_system__socket_write($socket, $output, $counter = '') {
-	if ($return = @socket_write($socket, $output, strlen($output))) {
-		if ($counter) {
-			rrdp_system__count($counter, rrdp_system__calc_bytes($output));
-		}
+	$written = rrdp_socket_write_all($socket, $output);
+
+	if ($written === false) {
+		return false;
 	}
 
-	return $return;
+	if ($counter) {
+		rrdp_system__count($counter, rrdp_system__calc_bytes($output));
+	}
+
+	return $written;
 }
 
 function rrdp_system__socket_close($socket, $msg = false, $force = false) {
@@ -1992,18 +2000,20 @@ function rrdp_cmd__set_rsa($socket, $args) {
 	if (!is_null($arg)) {
 		switch($arg) {
 			case 'keys':
-				$rsa     = new phpseclib3\Crypt\RSA();
-				$private = $rsa->createKey(2048);
-				$public  = $rsa->getPublicKey();
+				$private = RSA::createKey(2048);
+				$public  = $private->getPublicKey();
 
-				$rrdp_config['encryption']['public_key']  = $public;
-				$rrdp_config['encryption']['private_key'] = $private;
+				if (!rrdp_write_key_pair('./include/public.key', (string) $public, './include/private.key', (string) $private)) {
+					rrdp_system__socket_write($socket, '% Unable to write new RSA key pair' . NL);
 
-				file_put_contents('./include/public.key', $rrdp_config['encryption']['public_key']);
-				file_put_contents('./include/private.key', $rrdp_config['encryption']['private_key']);
+					break;
+				}
 
-				$public_key = $rsa->loadPublicKey($rrdp_config['encryption']['public_key']);
-				$rrdp_config['encryption']['public_key_fingerprint'] = $public_key->getFingerprint();
+				$rrdp_config['encryption']['public_key']  = (string) $public;
+				$rrdp_config['encryption']['private_key'] = (string) $private;
+
+				$public_key                                          = RSA::loadPublicKey($rrdp_config['encryption']['public_key']);
+				$rrdp_config['encryption']['public_key_fingerprint'] = $public_key->getFingerprint('md5');
 
 				rrdp_cmd__show($socket, [ 0=>'rsa', 1=>'publickey']);
 
