@@ -567,8 +567,8 @@ function handle__request($input, $read_socket) {
 
 						foreach ($transactions as $transaction) {
 							[$time, $transaction] = explode("\t", $transaction);
-							$time        = trim($time);
-							$transaction = trim($transaction);
+							$time                 = trim($time);
+							$transaction          = trim($transaction);
 
 							if ($time) {
 								__logging(LOGGING_LOCATION_BUFFERED, '#1 ' . $transaction, 'MSR', SEVERITY_LEVEL_DEBUG);

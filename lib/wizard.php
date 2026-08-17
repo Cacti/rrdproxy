@@ -57,11 +57,16 @@ $active_config = [
 	'rrdcache_write_threads'    => 4,
 	'enable_password'           => '',
 ];
+$rrdp_config         = [];
+$rrdp_config_tmp     = [];
+$rrdp_remote_clients = [];
+$rrdp_remote_proxies = [];
 
 wizard();
 
 function wizard() {
-	global $microtime_start, $active_config;
+	global $microtime_start, $active_config, $rrdp_config, $rrdp_config_tmp;
+	global $rrdp_remote_clients, $rrdp_remote_proxies;
 
 	define('WIZARD_RUNNING', 1);
 
@@ -218,8 +223,7 @@ function wizard() {
 		$public  = $private->getPublicKey();
 
 		rrd_system__system_boolean_message('create: Generate RSA key-pair (2048Bit)', [$private, $public], true);
-		rrd_system__system_boolean_message('  save: New RSA public key', file_put_contents('./include/public.key', $public), true);
-		rrd_system__system_boolean_message('  save: New RSA private key', file_put_contents('./include/private.key', $private), true);
+		rrd_system__system_boolean_message('  save: New RSA key pair', rrdp_write_key_pair('./include/public.key', (string) $public, './include/private.key', (string) $private), true);
 	}
 
 	$filter_options = ['options' => ['regexp' => '/[\s]*/']];
@@ -711,6 +715,7 @@ function wizard_verify_rrdtool($path) {
 	global $active_config;
 
 	$valid_path = false;
+	$msg        = 'Invalid RRDtool path.';
 
 	if (!$path) {
 		$path = $active_config['path_rrdtool'];
@@ -757,6 +762,7 @@ function wizard_verify_rrdcached($path) {
 	global $active_config;
 
 	$valid_path = false;
+	$msg        = 'Invalid RRDCached path.';
 
 	if (!$path) {
 		$path = $active_config['path_rrdcached'];
@@ -867,7 +873,7 @@ function wizard_handle_title($page, $title = '') {
 	$title_spaces = strlen($title_prefix) + strlen($title_suffix);
 
 	if ($title_spaces > 75) {
-		$title_prefix = substr($title_prefix, 1, 75 - $title_suffix);
+		$title_prefix = substr($title_prefix, 1, 75 - strlen($title_suffix));
 		$title_spaces = 75;
 	}
 

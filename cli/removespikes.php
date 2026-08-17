@@ -48,14 +48,16 @@ if (file_exists('./include/global.php') & !file_exists('../rrdtool-proxy.php')) 
 }
 
 // setup defaults
-$debug     = false;
-$dryrun    = false;
-$avgnan    = 'avg';
-$rrdfile   = '';
-$std_kills = false;
-$var_kills = false;
-$html      = false;
-$backup    = false;
+$debug      = false;
+$dryrun     = false;
+$avgnan     = 'avg';
+$rrdfile    = '';
+$std_kills  = false;
+$var_kills  = false;
+$html       = false;
+$backup     = false;
+$config     = [];
+$new_output = [];
 
 if ($using_cacti) {
 	$method   = read_config_option('spikekill_method');
@@ -205,14 +207,17 @@ if ($rrdfile == '') {
 }
 
 // let's see if we can find rrdtool
-if (!$using_cacti) {
-	if (substr_count(PHP_OS, 'WIN')) {
-		$response = shell_exec('rrdtool.exe');
-	} else {
-		$response = shell_exec('rrdtool');
-	}
+$rrdtool_path = getenv('RRDP_RRDTOOL_PATH');
 
-	if (strlen($response)) {
+if ($rrdtool_path === false || $rrdtool_path === '') {
+	$rrdtool_path = $using_cacti ? read_config_option('path_rrdtool') : (substr_count(PHP_OS, 'WIN') ? 'rrdtool.exe' : 'rrdtool');
+}
+
+if (!$using_cacti) {
+	$response = removespikes_run_rrdtool($rrdtool_path, []);
+
+	if ($response !== false && strlen($response['stdout'] . $response['stderr'])) {
+		$response       = $response['stdout'] . $response['stderr'];
 		$response_array = explode(' ', $response);
 		print 'NOTE: Using ' . $response_array[0] . ' Version ' . $response_array[1] . "\n";
 	} else {
@@ -227,21 +232,26 @@ $seed = mt_rand();
 if ($using_cacti) {
 	if ($config['cacti_server_os'] == 'win32') {
 		$tempdir  = getenv('TEMP');
-		$xmlfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+		$xmlfile  = tempnam($tempdir, 'rrdproxy-dump-');
 		$bakfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 	} else {
 		$tempdir = '/tmp';
-		$xmlfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+		$xmlfile = tempnam($tempdir, 'rrdproxy-dump-');
 		$bakfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 	}
 } elseif (substr_count(PHP_OS, 'WIN')) {
 	$tempdir  = getenv('TEMP');
-	$xmlfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+	$xmlfile  = tempnam($tempdir, 'rrdproxy-dump-');
 	$bakfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 } else {
 	$tempdir = '/tmp';
-	$xmlfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+	$xmlfile = tempnam($tempdir, 'rrdproxy-dump-');
 	$bakfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
+}
+
+if ($xmlfile === false) {
+	print "FATAL: Unable to create a secure temporary file.\n";
+	exit(-12);
 }
 
 if ($html) {
@@ -255,10 +265,12 @@ if ($using_cacti) {
 // execute the dump command
 print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "NOTE: Creating XML file '$xmlfile' from '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 
-if ($using_cacti) {
-	shell_exec(read_config_option('path_rrdtool') . " dump $rrdfile > $xmlfile");
+$dump_result = removespikes_run_rrdtool($rrdtool_path, ['dump', $rrdfile]);
+
+if ($dump_result !== false && $dump_result['status'] === 0 && $dump_result['stdout'] !== '') {
+	file_put_contents($xmlfile, $dump_result['stdout'], LOCK_EX);
 } else {
-	shell_exec("rrdtool dump $rrdfile > $xmlfile");
+	unlink($xmlfile);
 }
 
 // read the xml file into an array
@@ -472,20 +484,35 @@ if ($html) {
 
 // All Functions
 function createRRDFileFromXML($xmlfile, $rrdfile) {
-	global $using_cacti, $html;
+	global $html, $rrdtool_path;
 
 	// execute the dump command
 	print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "NOTE: Re-Importing '$xmlfile' to '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 
-	if ($using_cacti) {
-		$response = shell_exec(read_config_option('path_rrdtool') . " restore -f -r $xmlfile $rrdfile");
-	} else {
-		$response = shell_exec("rrdtool restore -f -r $xmlfile $rrdfile");
-	}
+	$result   = removespikes_run_rrdtool($rrdtool_path, ['restore', '-f', '-r', $xmlfile, $rrdfile]);
+	$response = $result === false ? 'Unable to start RRDtool' : $result['stdout'] . $result['stderr'];
 
 	if (strlen($response)) {
 		print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . $response . ($html ? "</td></tr>\n" : "\n");
 	}
+}
+
+function removespikes_run_rrdtool($binary, $arguments) {
+	$descriptors = [
+		1 => ['pipe', 'w'],
+		2 => ['redirect', 1],
+	];
+	$process = proc_open(array_merge([$binary], $arguments), $descriptors, $pipes);
+
+	if (!is_resource($process)) {
+		return false;
+	}
+
+	$stdout = stream_get_contents($pipes[1]);
+	fclose($pipes[1]);
+	$status = proc_close($process);
+
+	return ['status' => $status, 'stdout' => $stdout, 'stderr' => ''];
 }
 
 function writeXMLFile($output, $xmlfile) {
@@ -722,9 +749,10 @@ function updateXML(&$output, &$rra) {
 	global $numspike, $percent, $avgnan, $method, $total_kills;
 
 	// variance subroutine
-	$rra_num = 0;
-	$ds_num  = 0;
-	$kills   = 0;
+	$rra_num   = 0;
+	$ds_num    = 0;
+	$kills     = 0;
+	$new_array = [];
 
 	if (sizeof($output)) {
 		foreach ($output as $line) {
@@ -798,6 +826,8 @@ function updateXML(&$output, &$rra) {
 }
 
 function removeComments(&$output) {
+	$new_array = [];
+
 	if (sizeof($output)) {
 		foreach ($output as $line) {
 			$line = trim($line);
@@ -866,7 +896,8 @@ function debug($string) {
 }
 
 function standard_deviation($samples) {
-	$sample_count = count($samples);
+	$sample_count  = count($samples);
+	$sample_square = [];
 
 	for ($current_sample = 0; $sample_count > $current_sample; ++$current_sample) {
 		$sample_square[$current_sample] = pow($samples[$current_sample], 2);

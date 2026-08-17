@@ -22,9 +22,9 @@
  +-------------------------------------------------------------------------+
 */
 
-use phpseclib\Crypt\Random;
-use phpseclib\Crypt\Rijndael;
-use phpseclib\Crypt\RSA;
+use phpseclib3\Crypt\Random;
+use phpseclib3\Crypt\Rijndael;
+use phpseclib3\Crypt\RSA;
 
 function rrdtool_pipe_init($rrdp_config) {
 	$fds = [
@@ -32,7 +32,7 @@ function rrdtool_pipe_init($rrdp_config) {
 		1 => ['pipe', 'w'],				// stdout
 		2 => ['file', '/dev/null', 'a']	// stderr
 	];
-	$process = @proc_open($rrdp_config['path_rrdtool'] . ' - ' . $rrdp_config['path_rra'], $fds, $pipes);
+	$process = @proc_open([$rrdp_config['path_rrdtool'], '-', $rrdp_config['path_rra']], $fds, $pipes);
 
 	if ($process === false) {
 		return false;
@@ -163,42 +163,312 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 function encrypt($output, $rsa_key) {
 	global $encryption;
 
-	if ($encryption) {
-		$rsa     = new RSA();
-		$aes     = new Rijndael();
-		$aes_key = Random::string(192);
+	if (!$encryption) {
+		return $output;
+	}
+
+	try {
+		$public  = RSA::loadPublicKey($rsa_key);
+
+		if (!$public instanceof phpseclib3\Crypt\RSA\PublicKey) {
+			return false;
+		}
+
+		$aes     = new Rijndael('cbc');
+		$aes_key = Random::string(32);
 
 		$aes->setKey($aes_key);
-		$ciphertext = base64_encode($aes->encrypt($output));
-		$rsa->loadKey($rsa_key);
-		$aes_key        = base64_encode($rsa->encrypt($aes_key));
-		$aes_key_length = str_pad(dechex(strlen($aes_key)),3,'0',STR_PAD_LEFT);
+		$aes->setIV(str_repeat("\0", 16));
+		$ciphertext     = base64_encode($aes->encrypt($output));
+		$aes_key        = base64_encode($public->encrypt($aes_key));
+		$aes_key_length = str_pad(dechex(strlen($aes_key)), 3, '0', STR_PAD_LEFT);
 
 		return $aes_key_length . $aes_key . $ciphertext;
-	} else {
-		return $output;
+	} catch (Throwable $e) {
+		return false;
 	}
 }
 
 function decrypt($input) {
 	global $rrdp_config, $encryption;
 
-	if ($encryption) {
-		$rsa = new RSA();
-		$aes = new Rijndael();
-
-		$aes_key_length = hexdec(substr($input,0,3));
-		$aes_key        = base64_decode(substr($input,3,$aes_key_length), true);
-		$ciphertext     = base64_decode(substr($input,3+$aes_key_length), true);
-
-		$rsa->loadKey($rrdp_config['encryption']['private_key']);
-		$aes_key = $rsa->decrypt($aes_key);
-		$aes->setKey($aes_key);
-
-		return $aes->decrypt($ciphertext);
-	} else {
+	if (!$encryption) {
 		return $input;
 	}
+
+	if (strlen($input) < 4 || !ctype_xdigit(substr($input, 0, 3))) {
+		return false;
+	}
+
+	$aes_key_length = hexdec(substr($input, 0, 3));
+
+	if ($aes_key_length < 1 || strlen($input) <= 3 + $aes_key_length) {
+		return false;
+	}
+
+	$aes_key    = base64_decode(substr($input, 3, $aes_key_length), true);
+	$ciphertext = base64_decode(substr($input, 3 + $aes_key_length), true);
+
+	if ($aes_key === false || $aes_key === '' || $ciphertext === false) {
+		return false;
+	}
+
+	try {
+		$private = RSA::loadPrivateKey($rrdp_config['encryption']['private_key']);
+
+		if (!$private instanceof phpseclib3\Crypt\RSA\PrivateKey) {
+			return false;
+		}
+
+		$aes     = new Rijndael('cbc');
+		$aes_key = $private->decrypt($aes_key);
+
+		if (!is_string($aes_key) || $aes_key === '') {
+			return false;
+		}
+
+		// phpseclib 2 truncated oversized Rijndael keys to 256 bits.
+		if (strlen($aes_key) > 32) {
+			$aes_key = substr($aes_key, 0, 32);
+		}
+
+		$aes->setKey($aes_key);
+		$aes->setIV(str_repeat("\0", 16));
+
+		return $aes->decrypt($ciphertext);
+	} catch (Throwable $e) {
+		return false;
+	}
+}
+
+function rrdp_path_is_absolute($path) {
+	return str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1;
+}
+
+function rrdp_resolve_rra_path($path, $must_exist = true) {
+	global $rrdp_config;
+
+	return rrdp_resolve_path_within($rrdp_config['path_rra'], $path, $must_exist);
+}
+
+function rrdp_resolve_path_within($base_path, $path, $must_exist = true) {
+	if (!is_string($path) || $path === '' || str_contains($path, "\0") || rrdp_path_is_absolute($path)) {
+		return false;
+	}
+
+	$segments = preg_split('~[\\\\/]+~', $path);
+
+	if ($segments === false || in_array('..', $segments, true)) {
+		return false;
+	}
+
+	$base = realpath($base_path);
+
+	if ($base === false) {
+		return false;
+	}
+
+	$candidate = $base . DIRECTORY_SEPARATOR . ltrim($path, '/\\');
+	$resolved  = realpath($candidate);
+
+	if ($resolved === false && !$must_exist) {
+		$ancestor = dirname($candidate);
+
+		while (!file_exists($ancestor) && $ancestor !== dirname($ancestor)) {
+			$ancestor = dirname($ancestor);
+		}
+
+		$resolved_ancestor = realpath($ancestor);
+
+		if ($resolved_ancestor === false || !rrdp_path_is_within($resolved_ancestor, $base)) {
+			return false;
+		}
+
+		return $candidate;
+	}
+
+	return $resolved !== false && rrdp_path_is_within($resolved, $base) ? $resolved : false;
+}
+
+function rrdp_path_is_within($path, $base) {
+	return $path === $base || str_starts_with($path, $base . DIRECTORY_SEPARATOR);
+}
+
+function rrdp_command_has_unsafe_path($command) {
+	return str_contains($command, "\0")
+		|| str_contains($command, "\r")
+		|| str_contains($command, "\n")
+		|| preg_match('~(^|[[:space:]=:,\\\\/])\.\.([\\\\/]|$)~', $command)        === 1
+		|| preg_match('~(^|[[:space:]=:,])(?:/|\\\\|[A-Za-z]:[\\\\/])~', $command) === 1;
+}
+
+function rrdp_parse_removespikes_options($input) {
+	$options     = str_getcsv($input, ' ', '"', '\\');
+	$result      = [];
+	$has_rrdfile = false;
+
+	foreach ($options as $option) {
+		if ($option === '') {
+			continue;
+		}
+
+		if (in_array($option, ['--backup', '--html', '--debug', '-d', '--dryrun', '-D'], true)) {
+			$result[] = $option;
+
+			continue;
+		}
+
+		if (preg_match('/^(?:-M|--method)=(?:stddev|variance)$/', $option)
+			|| preg_match('/^(?:-A|--avgnan)=(?:avg|nan)$/', $option)
+			|| preg_match('/^(?:-S|--stddev|-P|--percent|-N|--number|-n|-O|--outliers)=[0-9]+(?:\.[0-9]+)?$/', $option)) {
+			$result[] = $option;
+
+			continue;
+		}
+
+		if (preg_match('/^(?:-R|--rrdfile)=(.+)$/', $option, $matches)) {
+			if ($has_rrdfile) {
+				return false;
+			}
+
+			$path = rrdp_resolve_rra_path($matches[1]);
+
+			if ($path === false || !str_ends_with(strtolower($path), '.rrd')) {
+				return false;
+			}
+
+			$result[]    = $option[1] === 'R' ? '-R=' . $path : '--rrdfile=' . $path;
+			$has_rrdfile = true;
+
+			continue;
+		}
+
+		return false;
+	}
+
+	return $has_rrdfile ? $result : false;
+}
+
+function rrdp_run_process($command, $environment = null) {
+	$descriptors = [
+		1 => ['pipe', 'w'],
+		2 => ['redirect', 1],
+	];
+	$process = proc_open($command, $descriptors, $pipes, null, $environment);
+
+	if (!is_resource($process)) {
+		return false;
+	}
+
+	$stdout = stream_get_contents($pipes[1]);
+	fclose($pipes[1]);
+	$status = proc_close($process);
+
+	return ['status' => $status, 'stdout' => $stdout, 'stderr' => ''];
+}
+
+function rrdp_write_secure_file($path, $contents, $mode = 0600) {
+	$directory = dirname($path);
+	$temporary = tempnam($directory, '.rrdp-');
+
+	if ($temporary === false) {
+		return false;
+	}
+
+	@chmod($temporary, $mode);
+	$written = file_put_contents($temporary, $contents, LOCK_EX);
+
+	if ($written === false || !@rename($temporary, $path)) {
+		@unlink($temporary);
+
+		return false;
+	}
+
+	@chmod($path, $mode);
+
+	return $written;
+}
+
+function rrdp_write_key_pair($public_path, $public_key, $private_path, $private_key) {
+	try {
+		$public_fingerprint  = RSA::loadPublicKey($public_key)->getFingerprint('sha256');
+		$private_fingerprint = RSA::loadPrivateKey($private_key)->getPublicKey()->getFingerprint('sha256');
+	} catch (Throwable $e) {
+		return false;
+	}
+
+	if (!hash_equals($public_fingerprint, $private_fingerprint)) {
+		return false;
+	}
+
+	$public_temporary  = tempnam(dirname($public_path), '.rrdp-public-');
+	$private_temporary = tempnam(dirname($private_path), '.rrdp-private-');
+
+	if ($public_temporary === false || $private_temporary === false) {
+		if ($public_temporary !== false) {
+			@unlink($public_temporary);
+		}
+
+		if ($private_temporary !== false) {
+			@unlink($private_temporary);
+		}
+
+		return false;
+	}
+
+	@chmod($public_temporary, 0644);
+	@chmod($private_temporary, 0600);
+
+	if (file_put_contents($public_temporary, $public_key, LOCK_EX)   === false
+		|| file_put_contents($private_temporary, $private_key, LOCK_EX) === false) {
+		@unlink($public_temporary);
+		@unlink($private_temporary);
+
+		return false;
+	}
+
+	$previous_private = file_exists($private_path) ? file_get_contents($private_path) : false;
+
+	if (!@rename($private_temporary, $private_path)) {
+		@unlink($public_temporary);
+		@unlink($private_temporary);
+
+		return false;
+	}
+
+	if (!@rename($public_temporary, $public_path)) {
+		@unlink($public_temporary);
+
+		if ($previous_private === false) {
+			@unlink($private_path);
+		} else {
+			rrdp_write_secure_file($private_path, $previous_private, 0600);
+		}
+
+		return false;
+	}
+
+	@chmod($public_path, 0644);
+	@chmod($private_path, 0600);
+
+	return true;
+}
+
+function rrdp_socket_write_all($socket, $output) {
+	$length  = strlen($output);
+	$written = 0;
+
+	while ($written < $length) {
+		$result = @socket_write($socket, substr($output, $written), $length - $written);
+
+		if ($result === false || $result === 0) {
+			return false;
+		}
+
+		$written += $result;
+	}
+
+	return $written;
 }
 
 function __logging($location, $msg, $category, $severity) {

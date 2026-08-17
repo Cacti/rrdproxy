@@ -8,10 +8,18 @@ replication, support of Cacti Boost and, if needed, the RRDcached daemon. It
 allows system administrators to split Cacti's access resources across machines
 without the need for NFS.
 
-Due the fact that updates to files may contain sensitive data and to prevent
-undesired updates, RRDtool proxy utilizes high encrypted connections (RSA2048
-and AES192) with continuously changing keys.  This ensures a secured connection
-between the proxy and registered clients and/or other proxies.
+Because updates may contain sensitive data, RRDtool Proxy encrypts client
+traffic using RSA-2048 key exchange and a fresh 256-bit symmetric key for each
+message. Client IP addresses and public-key fingerprints must also be explicitly
+allowlisted.
+
+The current compatibility protocol verifies the presented public-key
+fingerprint, but does not yet perform a signed challenge proving possession of
+the corresponding private key. Its legacy CBC message format also lacks an
+authenticated integrity tag. Deploy the client port only on a trusted,
+firewalled management network. A future protocol version must add private-key
+proof and authenticated encryption in coordination with the Cacti client
+before these limitations can be removed.
 
 A local service port is provided to allow administrators are able to access a
 separate command line interface which provides easy access to configure and
@@ -200,4 +208,3 @@ rrdp#
 
   Currently, the RRDproxy wizard and command line interface port are both
   offering only english as the default language.
-
