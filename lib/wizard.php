@@ -24,7 +24,7 @@
 
 global $active_config;
 
-use phpseclib\Crypt\RSA;
+use phpseclib4\Crypt\RSA;
 
 $active_config = array(
 	'version'                   => RRDP_VERSION,
@@ -65,13 +65,7 @@ function wizard() {
 	global $microtime_start, $active_config;
 
 	/* include external libraries */
-	set_include_path('./include/phpseclib/');
-	require_once('Math/BigInteger.php');
-	require_once('Crypt/Base.php');
-	require_once('Crypt/Hash.php');
-	require_once('Crypt/Random.php');
-	require_once('Crypt/RSA.php');
-	require_once('Crypt/Rijndael.php');
+	require_once(__DIR__ . '/../vendor/autoload.php');
 
 	#### -- WELCOME -- ####
 	wizard_handle_title(1, 'Welcome');
@@ -215,11 +209,13 @@ function wizard() {
 	}
 
 	if ($refresh_rsa_keys === true) {
-		$rsa = new RSA();
-		$keys = $rsa->createKey(2048);
-		rrd_system__system_boolean_message( 'create: Generate RSA key-pair (2048Bit)', $keys, true );
-		rrd_system__system_boolean_message( '  save: New RSA public key', file_put_contents('./include/public.key', $keys['publickey']), true );
-		rrd_system__system_boolean_message( '  save: New RSA private key', file_put_contents('./include/private.key', $keys['privatekey']), true );
+		$rsa = RSA::createKey(2048);
+		$public_key = (string) $rsa->getPublicKey();
+		$private_key = (string) $rsa;
+
+		rrd_system__system_boolean_message( 'create: Generate RSA key-pair (2048Bit)', $rsa, true );
+		rrd_system__system_boolean_message( '  save: New RSA public key', file_put_contents('./include/public.key', $public_key), true );
+		rrd_system__system_boolean_message( '  save: New RSA private key', file_put_contents('./include/private.key', $private_key), true );
 	}
 
 	$filter_options = array('options' => array('regexp' => '/[\s]*/'));

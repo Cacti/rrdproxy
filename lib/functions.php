@@ -22,9 +22,8 @@
  +-------------------------------------------------------------------------+
 */
 
-use phpseclib\Crypt\Random;
-use phpseclib\Crypt\Rijndael;
-use phpseclib\Crypt\RSA;
+use phpseclib4\Crypt\PublicKeyLoader;
+use phpseclib4\Crypt\Rijndael;
 
 function rrdtool_pipe_init($rrdp_config) {
 	$fds = array(
@@ -156,14 +155,15 @@ function encrypt($output, $rsa_key) {
 	global $encryption;
 
 	if ($encryption) {
-		$rsa = new RSA();
-		$aes = new Rijndael();
-		$aes_key = Random::string(192);
+		$aes = new Rijndael('cbc');
+		/* phpseclib4 validates key length strictly; use a 256-bit key (32 bytes) */
+		$aes_key = random_bytes(32);
 
 		$aes->setKey($aes_key);
+		$aes->setIV(str_repeat("\0", $aes->getBlockLengthInBytes()));
 		$ciphertext = base64_encode($aes->encrypt($output));
-		$rsa->loadKey($rsa_key);
-		$aes_key = base64_encode($rsa->encrypt($aes_key));
+		$public_key = PublicKeyLoader::load($rsa_key);
+		$aes_key = base64_encode($public_key->encrypt($aes_key));
 		$aes_key_length = str_pad(dechex(strlen($aes_key)),3,'0',STR_PAD_LEFT);
 
 		return $aes_key_length . $aes_key . $ciphertext;
@@ -176,16 +176,16 @@ function decrypt($input) {
 	global $rrdp_config, $encryption;
 
 	if ($encryption) {
-		$rsa = new RSA();
-		$aes = new Rijndael();
+		$aes = new Rijndael('cbc');
 
 		$aes_key_length = hexdec(substr($input,0,3));
 		$aes_key = base64_decode(substr($input,3,$aes_key_length));
 		$ciphertext = base64_decode(substr($input,3+$aes_key_length));
 
-		$rsa->loadKey($rrdp_config['encryption']['private_key']);
-		$aes_key = $rsa->decrypt($aes_key);
+		$private_key = PublicKeyLoader::load($rrdp_config['encryption']['private_key']);
+		$aes_key = $private_key->decrypt($aes_key);
 		$aes->setKey($aes_key);
+		$aes->setIV(str_repeat("\0", $aes->getBlockLengthInBytes()));
 		return $aes->decrypt($ciphertext);
 	} else {
 		return $input;

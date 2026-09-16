@@ -22,6 +22,8 @@
  +-------------------------------------------------------------------------+
 */
 
+use phpseclib4\Crypt\PublicKeyLoader;
+
 function interact() {
 	global
 		$rrdp_remoteproxies,
@@ -53,9 +55,6 @@ function interact() {
 
 	$rrdp_remoteproxies = array();
 	$rrdp_replicator_state = 'running';
-
-	/* enable message encryption */
-	$rsa = new \phpseclib\Crypt\RSA();
 
 	/* start listening for cluster peers */
 	$rrdp_server = @socket_create( (($rrdp_config['ipv6']) ? AF_INET : AF_INET ), SOCK_STREAM, SOL_TCP);
@@ -253,9 +252,9 @@ function interact() {
 											$ip = $rrdp_remoteproxies[$index]['ip'];
 											$rsa_finger_print = isset($rrdp_remote_proxies[$ip]) ? $rrdp_remote_proxies[$ip]['fingerprint'] : 'unknown';
 
-											$rsa->loadKey($client_public_key);
+													$remote_key = PublicKeyLoader::load($client_public_key);
 
-											if ($rsa_finger_print == $rsa->getPublicKeyFingerprint()) {
+													if ($rsa_finger_print == $remote_key->getFingerprint('md5')) {
 												/* registered public key has been received */
 												$rrdp_remoteproxies[$index]['authenticated'] = true;
 												$rrdp_remoteproxies[$index]['public_key'] = $client_public_key;
@@ -385,9 +384,6 @@ if (1==2) {
 function __remote_connect( $remote_ip, $remote_port, $remote_fingerprint ) {
 	global $rrdp_config, $rrdp_encryption;
 
-	/* enable message encryption */
-	$rsa = $rsa = new \phpseclib\Crypt\RSA();
-
 	$rrdp_socket = @socket_create( (($rrdp_config['ipv6']) ? AF_INET6 : AF_INET ), SOCK_STREAM, SOL_TCP);
 
 	if ( @socket_connect( $rrdp_socket, $remote_ip, $remote_port) === true ) {
@@ -414,8 +410,8 @@ function __remote_connect( $remote_ip, $remote_port, $remote_fingerprint ) {
 			}
 		}
 
-		$rsa->loadKey($rrdp_public_key);
-		$fingerprint = $rsa->getPublicKeyFingerprint();
+		$remote_key = PublicKeyLoader::load($rrdp_public_key);
+		$fingerprint = $remote_key->getFingerprint('md5');
 		if ($remote_fingerprint != $fingerprint) {
 			/* fingerprint mismatch */
 			return false;

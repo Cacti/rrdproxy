@@ -22,7 +22,7 @@
  +-------------------------------------------------------------------------+
 */
 
-use phpseclib\Crypt\RSA;
+use phpseclib4\Crypt\PublicKeyLoader;
 
 function interact($socket_client) {
 	/*
@@ -58,9 +58,6 @@ function interact($socket_client) {
 
 	$real_client_resource_id = rrdp_system__get_resource_id($socket_client);
 	$ipc_parent_resource_id = rrdp_system__get_resource_id($ipc_socket_parent);
-
-	/* enable message encryption */
-	$rsa = new RSA();
 
 	$input = '';
 
@@ -127,9 +124,9 @@ function interact($socket_client) {
 											$client_public_key = $transaction;
 											socket_getpeername($socket_client, $ip);
 											$rsa_finger_print = isset($rrdp_config['remote_clients'][$ip]) ? $rrdp_config['remote_clients'][$ip] : 'unknown';
-											$rsa->loadKey($client_public_key);
+													$remote_key = PublicKeyLoader::load($client_public_key);
 
-											if ($rsa_finger_print == $rsa->getPublicKeyFingerprint()) {
+													if ($rsa_finger_print == $remote_key->getFingerprint('md5')) {
 												/* registered public key has been received */
 												$client_authenticated = true;
 												/* send out proxy's public key */

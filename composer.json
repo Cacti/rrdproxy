@@ -1,0 +1,10 @@
+{
+    "name": "cacti/rrdproxy",
+    "description": "RRDtool Proxy Server for the Cacti Monitoring Solution",
+    "license": "GPL-2.0-or-later",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "phpseclib/phpseclib": "^4.0"
+    }
+}

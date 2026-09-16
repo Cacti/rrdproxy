@@ -25,7 +25,8 @@
 
 /* do NOT run this script through a web browser */
 
-use phpseclib\Crypt\RSA;
+use phpseclib4\Crypt\PublicKeyLoader;
+use phpseclib4\Crypt\RSA;
 
 if (!isset($_SERVER['argv'][0]) || isset($_SERVER['REQUEST_METHOD']) || isset($_SERVER['REMOTE_ADDR'])) {
 	die('<br><strong>This script is only meant to run at the command line.</strong>');
@@ -170,13 +171,7 @@ require_once ('./include/config');
 @include_once ('./include/proxies');
 
 /* include external libraries */
-set_include_path('./include/phpseclib/');
-require_once ('Math/BigInteger.php');
-require_once ('Crypt/Base.php');
-require_once ('Crypt/Hash.php');
-require_once ('Crypt/Random.php');
-require_once ('Crypt/RSA.php');
-require_once ('Crypt/Rijndael.php');
+require_once (__DIR__ . '/vendor/autoload.php');
 
 /* install signal handler */
 pcntl_signal(SIGHUP, 'rrdp_sig_handler');
@@ -784,12 +779,10 @@ function rrdp_system__check() {
 function rrdp_system__encryption_init() {
 	global $rrdp_config;
 
-	$rsa = new RSA();
-
 	if (!file_exists('./include/public.key') || !file_exists('./include/private.key')) {
-		$keys = $rsa -> createKey(2048);
-		$rrdp_config['encryption']['public_key'] = $keys['publickey'];
-		$rrdp_config['encryption']['private_key'] = $keys['privatekey'];
+		$rsa = RSA::createKey(2048);
+		$rrdp_config['encryption']['public_key'] = (string) $rsa->getPublicKey();
+		$rrdp_config['encryption']['private_key'] = (string) $rsa;
 
 		file_put_contents('./include/public.key', $rrdp_config['encryption']['public_key']);
 		file_put_contents('./include/private.key', $rrdp_config['encryption']['private_key']);
@@ -800,8 +793,8 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['private_key'] = file_get_contents('./include/private.key');
 	rrd_system__system_boolean_message('init: RSA private key', $rrdp_config['encryption']['private_key'], true);
 
-	$rsa -> loadKey($rrdp_config['encryption']['public_key']);
-	$rrdp_config['encryption']['public_key_fingerprint'] = $rsa -> getPublicKeyFingerprint();
+	/* md5 fingerprint kept for compatibility with previously recorded proxy/client fingerprints */
+	$rrdp_config['encryption']['public_key_fingerprint'] = PublicKeyLoader::load($rrdp_config['encryption']['public_key'])->getFingerprint('md5');
 }
 
 function rrdp_system__replicator($input) {
@@ -1859,16 +1852,14 @@ function rrdp_cmd__set_rsa($socket, $args) {
 	if ( !is_null($arg) ) {
 		switch($arg) {
 			case 'keys' :
-				$rsa = new RSA();
-				$keys = $rsa -> createKey(2048);
-				$rrdp_config['encryption']['public_key'] = $keys['publickey'];
-				$rrdp_config['encryption']['private_key'] = $keys['privatekey'];
+				$rsa = RSA::createKey(2048);
+				$rrdp_config['encryption']['public_key'] = (string) $rsa->getPublicKey();
+				$rrdp_config['encryption']['private_key'] = (string) $rsa;
 
 				file_put_contents('./include/public.key', $rrdp_config['encryption']['public_key']);
 				file_put_contents('./include/private.key', $rrdp_config['encryption']['private_key']);
 
-				$rsa -> loadKey($rrdp_config['encryption']['public_key']);
-				$rrdp_config['encryption']['public_key_fingerprint'] = $rsa -> getPublicKeyFingerprint();
+				$rrdp_config['encryption']['public_key_fingerprint'] = PublicKeyLoader::load($rrdp_config['encryption']['public_key'])->getFingerprint('md5');
 
 				rrdp_cmd__show($socket, array( 0=>'rsa', 1=>'publickey'));
 
