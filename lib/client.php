@@ -112,7 +112,7 @@ function interact($socket_client) {
 							$max_input_size = $client_authenticated ? RRDP_MAX_REQUEST_SIZE : RRDP_MAX_KEY_SIZE;
 
 							if (strlen($input) > $max_input_size) {
-								rrdp_system__socket_write($socket_client, RRD_ERROR . ' Request too large' . $end_of_sequence);
+								rrdp_system__socket_write($socket_client, (($client_authenticated) ? encrypt(RRD_ERROR . ' Request too large', $client_public_key) : RRD_ERROR . ' Request too large') . $end_of_sequence);
 								__logging(LOGGING_LOCATION_BUFFERED, 'Client request exceeded the maximum frame size', 'IPC', SEVERITY_LEVEL_WARNING);
 								$rrdp_status['status'] = 'CLOSEDOWN_BY_VIOLATION';
 
@@ -220,7 +220,7 @@ function interact($socket_client) {
 
 												if ($rrdtool_process_pipes === false) {
 													rrdp_system__count('rrd_pipe_broken');
-													rrdp_system__socket_write($socket_client, encrypt(RRD_ERROR . 'RRDTOOL_PIPE_UNAVAILABLE', $client_public_key) . $end_of_sequence);
+													rrdp_system__socket_write($socket_client, encrypt(RRD_ERROR . ' RRDTOOL_PIPE_UNAVAILABLE', $client_public_key) . $end_of_sequence);
 
 													continue;
 												}
@@ -420,7 +420,8 @@ function interact($socket_client) {
 													break;
 												case 'removespikes':
 													$parsed_options   = rrdp_parse_removespikes_options($cmd_options);
-													$environment      = array_merge($_ENV, ['RRDP_RRDTOOL_PATH' => $rrdp_config['path_rrdtool']]);
+												// inherit the full process environment (getenv() unlike $_ENV isn't gated by variables_order)
+												$environment      = array_merge(getenv(), ['RRDP_RRDTOOL_PATH' => $rrdp_config['path_rrdtool']]);
 													$result           = $parsed_options                        === false ? false : rrdp_run_process(array_merge([PHP_BINARY, '-q', $rrdp_config['path_cli'] . '/removespikes.php'], $parsed_options), $environment);
 													$rrdp_exec_status = $result !== false && $result['status'] === 0;
 													$rrdp_exec_return = $result !== false ? $result['stdout'] . $result['stderr'] : 'Invalid removespikes options';

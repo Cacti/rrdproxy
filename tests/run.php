@@ -24,7 +24,11 @@ mkdir($rra_root, 0700, true);
 mkdir($outside, 0700, true);
 file_put_contents($rra_root . '/sample.rrd', 'rrd');
 file_put_contents($outside . '/outside.rrd', 'outside');
-symlink($outside, $rra_root . '/escape');
+$symlink_created = @symlink($outside, $rra_root . '/escape');
+
+if (!$symlink_created) {
+	fwrite(STDERR, 'SKIP: symlink() is not available in this environment; skipping the symlink escape check.' . PHP_EOL);
+}
 
 $rrdp_config        = ['path_rra' => $rra_root];
 $canonical_rra_root = realpath($rra_root);
@@ -33,7 +37,13 @@ check(rrdp_resolve_rra_path('sample.rrd') === realpath($rra_root . '/sample.rrd'
 check(rrdp_resolve_rra_path('nested/new', false) === $canonical_rra_root . '/nested/new', 'A future path beneath the RRA root should resolve');
 check(rrdp_resolve_rra_path('../outside/outside.rrd') === false, 'Parent traversal must be rejected');
 check(rrdp_resolve_rra_path($outside . '/outside.rrd') === false, 'Absolute paths must be rejected');
-check(rrdp_resolve_rra_path('escape/outside.rrd') === false, 'Symlink escapes must be rejected');
+
+if ($symlink_created) {
+	check(rrdp_resolve_rra_path('escape/outside.rrd') === false, 'Symlink escapes must be rejected');
+} else {
+	fwrite(STDERR, 'SKIP: Symlink escapes must be rejected (no symlink() support)' . PHP_EOL);
+}
+
 check(rrdp_command_has_unsafe_path("update foo.rrd\ncreate escaped.rrd"), 'Embedded commands must be rejected');
 check(rrdp_command_has_unsafe_path('update ../outside.rrd'), 'RRDtool traversal must be rejected');
 check(rrdp_command_has_unsafe_path('graph graph.png DEF:x=../outside.rrd:value:AVERAGE'), 'RRDtool option traversal must be rejected');
