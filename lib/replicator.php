@@ -94,9 +94,10 @@ function interact() {
 	while ($__replicator_listening) {
 		// setup a dedicated persistent RRD_PIPE
 		if ($rrdtool_process === false) {
-			$rrdtool_process_pipes	 = rrdtool_pipe_init($rrdp_config);
-			$rrdtool_process		      = $rrdtool_process_pipes[0];
-			$rrdtool_pipes			       = $rrdtool_process_pipes[1];
+			$rrdtool_process_pipes = rrdtool_pipe_init($rrdp_config);
+
+			$rrdtool_process = $rrdtool_process_pipes[0];
+			$rrdtool_pipes   = $rrdtool_process_pipes[1];
 		}
 
 		$write  = [];
@@ -124,13 +125,15 @@ function interact() {
 
 					// verify authorization
 					if (array_key_exists($ip, $rrdp_remote_proxies) === true) {
-						$key                      = intval($socket_descriptor);
+						$key = intval($socket_descriptor);
+
 						$rrdp_remoteproxies[$key] = [ 'socket' => $socket_descriptor, 'ip' => $ip, 'public_key' => false, 'authenticated' => false, 'last_seen' => time()];
 
 						__logging(LOGGING_LOCATION_BUFFERED, 'Remote Proxy connection request #' . $key . '[IP: ' . $ip . '] granted', 'ACL', SEVERITY_LEVEL_DEBUG);
 					} else {
 						@socket_write($socket_descriptor, "ERROR: Access denied.\r\n");
 						@socket_close($socket_descriptor);
+
 						rrdp_system__count('connections_refused');
 						__logging(LOGGING_LOCATION_BUFFERED, 'Remote Proxy connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
 					}
@@ -336,9 +339,11 @@ function interact() {
 
 					if ($remote_index) {
 						$rrdp_replicator_state = 'synchronizing';
-						$read_socket           = $rrdp_remoteproxies[$remote_index]['socket'];
-						$public_key            = $rrdp_remoteproxies[$remote_index]['public_key'];
-						$ip                    = $rrdp_remoteproxies[$remote_index]['ip'];
+
+						$read_socket = $rrdp_remoteproxies[$remote_index]['socket'];
+						$public_key  = $rrdp_remoteproxies[$remote_index]['public_key'];
+						$ip          = $rrdp_remoteproxies[$remote_index]['ip'];
+
 						__logging(LOGGING_LOCATION_BUFFERED, 'Start full synchronisation process with #' . intval($read_socket) . ' [IP: ' . $ip . ']', 'MSR', SEVERITY_LEVEL_NOTIFICATION);
 						rrdp_system__socket_write($read_socket, encrypt('FULLSCAN END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
 					} else {

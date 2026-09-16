@@ -859,7 +859,7 @@ function updateXML(&$output, &$rra) {
 							}
 						} else {
 							if (($dsvalue > $rra[$rra_num][$ds_num]['max_cutoff']) ||
-									($dsvalue < $rra[$rra_num][$ds_num]['min_cutoff'])) {
+								($dsvalue < $rra[$rra_num][$ds_num]['min_cutoff'])) {
 								if ($kills < $numspike) {
 									if ($avgnan == 'avg') {
 										$dsvalue = $rra[$rra_num][$ds_num]['average'];
