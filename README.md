@@ -38,7 +38,7 @@ higher).  The most recent version of RRDProxy requires composer
 
 ### Minimum Requirements
 
-- PHP Version 8.1 or higher
+- PHP Version 8.2 or higher
 
   Installation must include and enable the following modules:
 
@@ -56,7 +56,7 @@ higher).  The most recent version of RRDProxy requires composer
 
 All minimum requirements must be met, though the following are more optional:
 
-- PHP Version 8.1 or higher
+- PHP Version 8.2 or higher
 
   Include all minimum recommendation modules
 
