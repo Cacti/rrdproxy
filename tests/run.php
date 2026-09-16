@@ -7,6 +7,15 @@ require dirname(__DIR__) . '/lib/functions.php';
 $failures = [];
 $checks   = 0;
 
+/**
+ * Records a single test assertion: increments the running check count and, if
+ * $condition is falsy, appends $message to the list of failures.
+ *
+ * @param mixed  $condition
+ * @param string $message
+ *
+ * @return void
+ */
 function check($condition, $message) {
 	global $checks, $failures;
 
@@ -92,6 +101,14 @@ if (count($sockets) === 2) {
 	socket_close($sockets[1]);
 }
 
+/**
+ * Recursively deletes a file, symlink, or directory tree used by the test
+ * fixtures.
+ *
+ * @param string $path
+ *
+ * @return void
+ */
 function remove_test_tree($path) {
 	if (is_link($path) || is_file($path)) {
 		unlink($path);

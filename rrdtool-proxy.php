@@ -699,6 +699,13 @@ while ($__server_listening) {
 
 // ####################################   MSR FUNCTIONS   ####################################
 
+/**
+ * Flushes any buffered MSR (multi-server replication) commands whose 10-second
+ * timeframe has elapsed to per-peer files under ./msr/, or clears the buffer
+ * entirely if there are no configured remote proxies.
+ *
+ * @return void
+ */
 function rrdp_msr__block_write() {
 	global $rrdp_config, $rrdp_msr_buffer;
 
@@ -739,6 +746,13 @@ function rrdp_msr__block_write() {
 
 // ####################################   INTERNAL FUNCTIONS   ####################################
 
+/**
+ * Runs periodic (every 30s) health checks: monitors RRA/MSR filesystem disk
+ * usage and logs warning/alert/critical messages as free space thresholds are
+ * crossed.
+ *
+ * @return void
+ */
 function rrdp_system__check() {
 	global $rrdp_config, $rrdp_status;
 
@@ -817,6 +831,13 @@ function rrdp_system__check() {
 	return;
 }
 
+/**
+ * Generates (if missing) and loads this proxy's RSA key pair, populating
+ * $rrdp_config['encryption'] with the public/private keys and the public key's
+ * md5 fingerprint.
+ *
+ * @return void
+ */
 function rrdp_system__encryption_init() {
 	global $rrdp_config;
 
@@ -842,6 +863,15 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['public_key_fingerprint'] = $private->getFingerprint('md5');
 }
 
+/**
+ * Handles a serialized IPC status update received from the replicator child
+ * process: forwards debug log entries and starts/pauses the client listener
+ * socket depending on the replicator's reported synchronization state.
+ *
+ * @param string $input
+ *
+ * @return void
+ */
 function rrdp_system__replicator($input) {
 	global $rrdp_client, $rrd_config;
 
@@ -871,6 +901,15 @@ function rrdp_system__replicator($input) {
 	}
 }
 
+/**
+ * Handles a serialized IPC status update received from a client-handling child
+ * process: forwards debug log entries, merges any pending MSR commands into the
+ * shared buffer, and rolls the reported counters/status into the global stats.
+ *
+ * @param string $input
+ *
+ * @return void
+ */
 function rrdp_system__client(&$input) {
 	global $rrdp_msr_buffer;
 
@@ -913,6 +952,14 @@ function rrdp_system__client(&$input) {
 	}
 }
 
+/**
+ * Logs a fatal message, signals the parent process to terminate, and
+ * terminates this process.
+ *
+ * @param string $msg
+ *
+ * @return never
+ */
 function rrd_system__system_die($msg = '') {
 	global $ppid;
 
@@ -927,6 +974,18 @@ function rrd_system__system_die($msg = '') {
 	die($msg);
 }
 
+/**
+ * Prints a timestamped "[OK]"/"[FAILED]"/"[SKIPPED]" startup status line for
+ * $msg, and (when $boolean_state is falsy and $exit is true) logs a critical
+ * error and terminates the process via rrd_system__system_die().
+ *
+ * @param string $msg
+ * @param mixed  $boolean_state
+ * @param bool   $exit
+ * @param bool   $skip
+ *
+ * @return void
+ */
 function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false, $skip = false) {
 	global $colors, $microtime_start, $systemd;
 
@@ -958,10 +1017,27 @@ function rrd_system__system_boolean_message($msg, $boolean_state, $exit = false,
 	}
 }
 
+/**
+ * Returns the byte length of $str, using mbstring's 8-bit-safe strlen() when
+ * mbstring function overloading is active.
+ *
+ * @param string $str
+ *
+ * @return int
+ */
 function rrdp_system__calc_bytes($str) {
 	return (ini_get('mbstring.func_overload') ? mb_strlen($str, '8bit') : strlen($str));
 }
 
+/**
+ * Increments a named counter in $rrdp_status by $value, wrapping it back to 0
+ * before it would exceed a signed 32-bit integer.
+ *
+ * @param string $variable
+ * @param int    $value
+ *
+ * @return bool
+ */
 function rrdp_system__count($variable, $value = 1) {
 	global $rrdp_status;
 
@@ -975,6 +1051,14 @@ function rrdp_system__count($variable, $value = 1) {
 	return false;
 }
 
+/**
+ * Recomputes a "max" style status counter (max_admin_connections or
+ * max_client_connections) from the current number of connected clients.
+ *
+ * @param string $variable
+ *
+ * @return void
+ */
 function rrdp_system__update($variable) {
 	global $rrdp_admin_clients, $rrdp_clients, $rrdp_status;
 
@@ -996,6 +1080,14 @@ function rrdp_system__update($variable) {
 	return;
 }
 
+/**
+ * Writes the admin CLI prompt (reflecting privileged/debug mode) back to a
+ * connected admin socket.
+ *
+ * @param resource|\Socket $socket
+ *
+ * @return void
+ */
 function rrdp_system__return_prompt($socket) {
 	global $rrdp_admin_clients, $rrdp_config, $colors;
 
@@ -1007,6 +1099,16 @@ function rrdp_system__return_prompt($socket) {
 	}
 }
 
+/**
+ * Writes $output to a socket (retrying on short writes) and, if $counter is
+ * given, tallies the bytes sent against that named counter.
+ *
+ * @param resource|\Socket $socket
+ * @param string           $output
+ * @param string           $counter
+ *
+ * @return int|false
+ */
 function rrdp_system__socket_write($socket, $output, $counter = '') {
 	$written = rrdp_socket_write_all($socket, $output);
 
@@ -1021,6 +1123,17 @@ function rrdp_system__socket_write($socket, $output, $counter = '') {
 	return $written;
 }
 
+/**
+ * Optionally writes a final message, then closes a socket, either gracefully
+ * (shutdown + close) or forcibly (SO_LINGER with a zero timeout, discarding
+ * unsent data).
+ *
+ * @param resource|\Socket $socket
+ * @param string|false     $msg
+ * @param bool             $force
+ *
+ * @return bool
+ */
 function rrdp_system__socket_close($socket, $msg = false, $force = false) {
 	if ($msg) {
 		rrdp_system__socket_write($socket, $msg);
@@ -1038,6 +1151,15 @@ function rrdp_system__socket_close($socket, $msg = false, $force = false) {
 	return true;
 }
 
+/**
+ * Computes a live (non-cached) value for a status variable such as
+ * threads_connected, uptime, memory_usage, memory_peak_usage, or
+ * connections_open.
+ *
+ * @param string $variable
+ *
+ * @return int|float|string
+ */
 function rrdp_system__status_live($variable) {
 	global $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_config;
 
@@ -1069,6 +1191,14 @@ function rrdp_system__status_live($variable) {
 	return $status;
 }
 
+/**
+ * Parses a human-readable size string (e.g. "512M", "2G") such as php.ini's
+ * memory_limit into a byte count.
+ *
+ * @param string $val
+ *
+ * @return int
+ */
 function rrdp_system__convert2bytes($val) {
 	preg_match('/^\s*([0-9.]+)\s*([KMGTPE])B?\s*$/i', $val, $matches);
 	$num = (float)$matches[1];
@@ -1091,6 +1221,18 @@ function rrdp_system__convert2bytes($val) {
 	return intval($num);
 }
 
+/**
+ * Records a log entry into the in-memory buffered/SNMP logging ring buffers
+ * (subject to their configured severity thresholds) and streams it live to any
+ * connected admin console with console logging enabled.
+ *
+ * @param int    $location
+ * @param string $msg
+ * @param string $category
+ * @param int    $severity
+ *
+ * @return void
+ */
 function rrdp_system__logging($location, $msg, $category, $severity) {
 	global $rrdp_config, $rrdp_admin_clients, $rrdp_admin_sockets, $colors, $rrdp_buffers, $severity_levels;
 
@@ -1136,6 +1278,16 @@ function rrdp_system__logging($location, $msg, $category, $severity) {
 	return;
 }
 
+/**
+ * Applies an admin CLI output filter/pipe (`| i|e|b|I|E|B|exp <pattern>`) to
+ * $output, appending a match count, or returns an error message for an
+ * unrecognized filter.
+ *
+ * @param string             $output
+ * @param array<int, string> $args
+ *
+ * @return string
+ */
 function rrdp_system__filter($output, $args) {
 	if (!$output || !$args) {
 		return $output;
@@ -1195,6 +1347,13 @@ function rrdp_system__filter($output, $args) {
 	return '% Unrecognized arguments: \'' . implode(' ', $args) . '\'' . NL;
 }
 
+/**
+ * Recomputes the effective global console logging severity/category (the
+ * highest/broadest setting across all privileged admin sessions) and notifies
+ * the replication master/slave child processes of the updated running config.
+ *
+ * @return void
+ */
 function rrdp_system__global_console_logging_update() {
 	global $rrdp_config, $rrdp_admin_clients, $rrdp_clients, $rrdp_ipc_sockets, $rrdp_repl_master_pid, $rrdp_repl_slave_pid;
 
@@ -1259,16 +1418,41 @@ function rrdp_system__global_console_logging_update() {
 	return;
 }
 
+/**
+ * Returns a stable per-connection identifier for a socket/resource, using
+ * spl_object_id() on PHP 8's \Socket objects or intval() on legacy resources.
+ *
+ * @param resource|\Socket $object
+ *
+ * @return int
+ */
 function rrdp_system__get_resource_id($object) {
 	return (PHP_VERSION_ID >= 80000) ? spl_object_id($object) : intval($object);
 }
 
+/**
+ * Checks whether $object is a valid socket handle, accounting for sockets
+ * being \Socket objects (PHP 8+) rather than resources.
+ *
+ * @param mixed $object
+ *
+ * @return bool
+ */
 function rrdp_system__is_resource($object) {
 	return (PHP_VERSION_ID >= 80000) ? is_object($object) : is_resource($object);
 }
 
 // ####################################   SYSTEM COMMANDS   ####################################
 
+/**
+ * Admin CLI "clear" command: dispatches to the matching rrdp_cmd__clear_*
+ * subcommand handler based on the first argument.
+ *
+ * @param resource|\Socket|string $socket
+ * @param array<int, string>      $args
+ *
+ * @return void
+ */
 function rrdp_cmd__clear($socket, $args) {
 	$arg = array_shift($args);
 
@@ -1284,6 +1468,12 @@ function rrdp_cmd__clear($socket, $args) {
 	rrdp_system__socket_write($socket, '% Incomplete command. Type "clear ?" for a list of subcommands' . NL);
 }
 
+/**
+ * Admin CLI "clear counters" command: resets all non-"live" entries in
+ * $rrdp_status back to zero.
+ *
+ * @return void
+ */
 function rrdp_cmd__clear_counters() {
 	global $rrdp_status;
 
@@ -1295,6 +1485,15 @@ function rrdp_cmd__clear_counters() {
 	rrdp_system__logging(LOGGING_LOCATION_BUFFERED, 'Counters have been cleared', 'SYS', SEVERITY_LEVEL_NOTIFICATION);
 }
 
+/**
+ * Admin CLI "clear logging buffered|snmp" command: empties the selected
+ * in-memory logging ring buffer.
+ *
+ * @param resource|\Socket|string $socket
+ * @param array<int, string>      $args
+ *
+ * @return void
+ */
 function rrdp_cmd__clear_logging($socket, $args) {
 	global $rrdp_buffers;
 
@@ -1322,11 +1521,28 @@ function rrdp_cmd__clear_logging($socket, $args) {
 	}
 }
 
+/**
+ * Admin CLI "reset" command: clears the client terminal's screen buffer.
+ *
+ * @param resource|\Socket|string $socket
+ *
+ * @return void
+ */
 function rrdp_cmd__reset($socket) {
 	// client would like to regularly clear and reset terminal screen
 	rrdp_system__socket_write($socket, ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT);
 }
 
+/**
+ * Admin CLI "enable" command: promotes the calling (localhost-only) admin
+ * session to privileged mode, after verifying the enable password if one is
+ * configured.
+ *
+ * @param resource|\Socket $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__enable($socket, $args) {
 	global $rrdp_admin_clients, $rrdp_config;
 	$arg = array_shift($args);
@@ -1355,6 +1571,15 @@ function rrdp_cmd__enable($socket, $args) {
 	}
 }
 
+/**
+ * Admin CLI "disable" command: returns the calling admin session to
+ * unprivileged mode.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__disable($socket, $args) {
 	global $rrdp_admin_clients;
 
@@ -1370,6 +1595,15 @@ function rrdp_cmd__disable($socket, $args) {
 	rrdp_system__socket_write($socket, '% Unrecognized command' . NL);
 }
 
+/**
+ * Admin CLI "quit" command: drops back to unprivileged mode and closes the
+ * calling admin connection.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__quit($socket, $args) {
 	global $rrdp_admin_clients, $rrdp_admin_sockets;
 
@@ -1392,6 +1626,17 @@ function rrdp_cmd__quit($socket, $args) {
 	unset($rrdp_admin_sockets[$socket_resource_id]);
 }
 
+/**
+ * Admin CLI "shutdown" command (also invoked directly with $socket ===
+ * 'SIGTERM' from the signal handler): gracefully stops accepting new clients,
+ * stops RRDCached, terminates all child processes, closes every socket, and
+ * exits the process.
+ *
+ * @param resource|\Socket|string $socket
+ * @param array<int, string>|false $args
+ *
+ * @return void
+ */
 function rrdp_cmd__shutdown($socket, $args) {
 	global $rrdp_clients, $rrdp_admin_clients, $rrdp_ipc_sockets, $rrdp_client, $rrdp_admin, $rrdcached_pid, $microtime_start, $rrdp_process_types, $systemd;
 
@@ -1479,6 +1724,17 @@ function rrdp_cmd__shutdown($socket, $args) {
 	rrdp_system__socket_write($socket, '% Unrecognized command' . NL);
 }
 
+/**
+ * Admin CLI "?"/"list" command: prints the available subcommands (and their
+ * help text) for the current privilege level, or for a specific command's `?`
+ * subtree when $root is given.
+ *
+ * @param resource|\Socket        $socket
+ * @param array<int, string>|false $args
+ * @param array<string, mixed>|false $root
+ *
+ * @return void
+ */
 function rrdp_cmd__list($socket, $args = false, $root = false) {
 	global $rrdp_admin_clients, $rrdp_help_messages;
 
@@ -1502,6 +1758,16 @@ function rrdp_cmd__list($socket, $args = false, $root = false) {
 	}
 }
 
+/**
+ * Admin CLI "show" command: dispatches to the appropriate report (threads,
+ * processes, counters, variables, clients, cluster, rsa, version, logging, or
+ * msr) and writes the (optionally filtered) output back to the socket.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__show($socket, $args) {
 	global $rrdp_admin_clients, $rrdp_config, $rrdp_status, $rrdp_clients, $rrdp_process_types;
 
@@ -1599,6 +1865,14 @@ function rrdp_cmd__show($socket, $args) {
 	return;
 }
 
+/**
+ * Builds the report text for "show logging buffered|snmp": the current
+ * contents of the selected in-memory logging ring buffer.
+ *
+ * @param string|false $arg
+ *
+ * @return string
+ */
 function rrdp_cmd__show_logging($arg) {
 	global $rrdp_buffers;
 
@@ -1629,6 +1903,14 @@ function rrdp_cmd__show_logging($arg) {
 	return $output;
 }
 
+/**
+ * Builds the report text for "show msr buffer|health|status": the pending
+ * multi-server-replication command buffer, keyed by timeframe.
+ *
+ * @param string|false $arg
+ *
+ * @return string
+ */
 function rrdp_cmd__show_msr($arg) {
 	global $rrdp_msr_buffer;
 
@@ -1665,6 +1947,15 @@ function rrdp_cmd__show_msr($arg) {
 	return $output;
 }
 
+/**
+ * Builds the "show version" report: banner/logo, version, uptime, memory
+ * usage, RSA fingerprint, running process IDs, and listening sockets (a
+ * condensed socket-only summary is returned when $systemd is true).
+ *
+ * @param bool $systemd
+ *
+ * @return string
+ */
 function rrdp_cmd__show_version($systemd = false) {
 	global $rrdp_config, $rrdp_clients, $rrdp_repl_master_pid, $rrdp_repl_slave_pid;
 
@@ -1708,6 +1999,16 @@ function rrdp_cmd__show_version($systemd = false) {
 	return $output;
 }
 
+/**
+ * Admin CLI "debug <process> on|off" command: toggles verbose debug logging
+ * for a given process (forwarding the toggle to the replicator over IPC when
+ * applicable) once no other admin session still needs it enabled.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__debug($socket, $args) {
 	global $rrdp_replicator_pid, $rrdp_admin_clients, $rrdp_help_messages, $rrdp_config, $rrdp_clients, $rrdp_ipc_sockets;
 
@@ -1782,6 +2083,15 @@ function rrdp_cmd__debug($socket, $args) {
 	}
 }
 
+/**
+ * Admin CLI "set" command: dispatches to the matching rrdp_cmd__set_*
+ * subcommand handler based on the first argument.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__set($socket, $args) {
 	$arg = array_shift($args);
 
@@ -1797,6 +2107,16 @@ function rrdp_cmd__set($socket, $args) {
 	rrdp_system__socket_write($socket, '% Incomplete command. Type "set ?" for a list of subcommands' . NL);
 }
 
+/**
+ * Admin CLI "set cluster add|remove|update" command: validates and persists a
+ * registered peer's IP/port/fingerprint to ./include/proxies, creates its MSR
+ * data subfolder, and notifies the replication master/slave of the change.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__set_cluster($socket, $args) {
 	global $rrdp_config, $rrdp_clients, $rrdp_repl_master_pid, $rrdp_repl_slave_pid, $rrdp_ipc_sockets;
 
@@ -1931,6 +2251,15 @@ function rrdp_cmd__set_cluster($socket, $args) {
 	return;
 }
 
+/**
+ * Admin CLI "set client add|remove" command: validates and persists a trusted
+ * client's IP/fingerprint to ./include/clients.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__set_client($socket, $args) {
 	global $rrdp_config;
 
@@ -1992,6 +2321,15 @@ function rrdp_cmd__set_client($socket, $args) {
 	return;
 }
 
+/**
+ * Admin CLI "set rsa keys" command: generates and atomically writes a new RSA
+ * key pair, refreshing the running config's key material and fingerprint.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__set_rsa($socket, $args) {
 	global $rrdp_config;
 
@@ -2030,6 +2368,15 @@ function rrdp_cmd__set_rsa($socket, $args) {
 	return;
 }
 
+/**
+ * Admin CLI "set logging buffered|snmp|terminal|console" command: updates the
+ * global or per-session logging severity/category thresholds.
+ *
+ * @param resource|\Socket   $socket
+ * @param array<int, string> $args
+ *
+ * @return void
+ */
 function rrdp_cmd__set_logging($socket, $args) {
 	global $rrdp_config, $rrdp_admin_clients, $logging_categories;
 
@@ -2230,12 +2577,22 @@ function handle_child_processes($ipc_sockets, $type, $ssock = false, $arg1 = fal
 }
 
 // display_version - displays the version of the RRDproxy
+/**
+ * Writes the proxy's version banner to STDOUT.
+ *
+ * @return void
+ */
 function display_version() {
 	$output = RRDP_VERSION_FULL;
 	fwrite(STDOUT, $output);
 }
 
 // display_help - displays the usage of the RRDproxy
+/**
+ * Writes the command-line usage/help text (and version banner) to STDOUT.
+ *
+ * @return void
+ */
 function display_help() {
 	display_version();
 	$output = NL . 'Usage: rrdtool-proxy.php [-w|--wizard] [-v|--version] [-h|--help] [-f|--force] [-s|--systemd]' . NL
@@ -2250,6 +2607,12 @@ function display_help() {
 }
 
 // wizard - starts the wizard for system setup
+/**
+ * Disables system logging and hands off execution to the interactive setup
+ * wizard, which exits the process when finished.
+ *
+ * @return never
+ */
 function init_wizard() {
 	define('SYSTEM_LOGGING', false);
 	include_once('./lib/wizard.php');
@@ -2257,6 +2620,14 @@ function init_wizard() {
 }
 
 // signal handler
+/**
+ * Process signal handler: triggers a graceful shutdown on SIGTERM and ignores
+ * SIGHUP/SIGUSR1 and any other signal.
+ *
+ * @param int $signo
+ *
+ * @return void
+ */
 function rrdp_sig_handler($signo) {
 	switch ($signo) {
 		case SIGTERM:
@@ -2271,6 +2642,12 @@ function rrdp_sig_handler($signo) {
 	}
 }
 
+/**
+ * Returns the ASCII-art Cacti/RRDtool Proxy banner used in startup, shutdown,
+ * and "show version" output.
+ *
+ * @return string
+ */
 function rrdp_get_cacti_proxy_logo() {
 	return
 		  NL . '# ' . ANSI_BOLD . ANSI_GREEN_FG . '    ___           _   _  ' . ANSI_RESET . '   __    __    ___     ___                     '

@@ -25,6 +25,13 @@
 use phpseclib4\Crypt\Rijndael;
 use phpseclib4\Crypt\RSA;
 
+/**
+ * Starts an RRDtool pipe-mode process and returns its process handle and stdio pipes.
+ *
+ * @param array<string, mixed> $rrdp_config
+ *
+ * @return array{0: resource, 1: array<int, resource>}|false
+ */
 function rrdtool_pipe_init($rrdp_config) {
 	$fds = [
 		0 => ['pipe', 'r'],				// stdin
@@ -44,10 +51,31 @@ function rrdtool_pipe_init($rrdp_config) {
 	}
 }
 
+/**
+ * Terminates a previously opened RRDtool pipe-mode process.
+ *
+ * @param resource $process
+ *
+ * @return void
+ */
 function rrdtool_pipe_close($process) {
 	proc_close($process);
 }
 
+/**
+ * Writes a command to an open RRDtool pipe and streams the (optionally compressed,
+ * encrypted) response back over the client socket in chunks as it arrives.
+ *
+ * @param string                $command
+ * @param array<int, resource>  $pipes
+ * @param resource|\Socket|false $socket
+ * @param string                $client_public_key
+ * @param bool                  $compression
+ * @param bool                  $silent_mode
+ * @param string                $terminator
+ *
+ * @return bool|string|null
+ */
 function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $compression, $silent_mode = false, $terminator = "_EOT_\r\n") {
 	$return_code = fwrite($pipes[0], $command);
 
@@ -159,6 +187,15 @@ function rrdtool_pipe_execute($command, $pipes, $socket, $client_public_key, $co
 	return null;
 }
 
+/**
+ * Encrypts $output for the holder of $rsa_key: a random AES-256-CBC session key
+ * encrypts the payload, and that session key is itself RSA-encrypted and prepended.
+ *
+ * @param string $output
+ * @param string $rsa_key
+ *
+ * @return string|false
+ */
 function encrypt($output, $rsa_key) {
 	global $encryption;
 
@@ -188,6 +225,14 @@ function encrypt($output, $rsa_key) {
 	}
 }
 
+/**
+ * Reverses encrypt(): RSA-decrypts the embedded AES session key with this proxy's
+ * private key, then AES-256-CBC decrypts the remaining ciphertext.
+ *
+ * @param string $input
+ *
+ * @return string|false
+ */
 function decrypt($input) {
 	global $rrdp_config, $encryption;
 
@@ -240,16 +285,44 @@ function decrypt($input) {
 	}
 }
 
+/**
+ * Determines whether a path is absolute (POSIX-rooted, UNC/backslash-rooted, or
+ * Windows drive-letter-rooted).
+ *
+ * @param string $path
+ *
+ * @return bool
+ */
 function rrdp_path_is_absolute($path) {
 	return str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1;
 }
 
+/**
+ * Resolves a client-supplied path against the configured RRA root, rejecting it
+ * if it would escape that root.
+ *
+ * @param string $path
+ * @param bool   $must_exist
+ *
+ * @return string|false
+ */
 function rrdp_resolve_rra_path($path, $must_exist = true) {
 	global $rrdp_config;
 
 	return rrdp_resolve_path_within($rrdp_config['path_rra'], $path, $must_exist);
 }
 
+/**
+ * Resolves $path relative to $base_path and confirms the result (or, for paths that
+ * don't need to exist yet, its nearest existing ancestor) stays within $base_path,
+ * rejecting traversal, absolute paths, null bytes, and symlink escapes.
+ *
+ * @param string $base_path
+ * @param mixed  $path
+ * @param bool   $must_exist
+ *
+ * @return string|false
+ */
 function rrdp_resolve_path_within($base_path, $path, $must_exist = true) {
 	if (!is_string($path) || $path === '' || str_contains($path, "\0") || rrdp_path_is_absolute($path)) {
 		return false;
@@ -289,10 +362,26 @@ function rrdp_resolve_path_within($base_path, $path, $must_exist = true) {
 	return $resolved !== false && rrdp_path_is_within($resolved, $base) ? $resolved : false;
 }
 
+/**
+ * Checks whether a canonical path is equal to, or nested under, a canonical base path.
+ *
+ * @param string $path
+ * @param string $base
+ *
+ * @return bool
+ */
 function rrdp_path_is_within($path, $base) {
 	return $path === $base || str_starts_with($path, $base . DIRECTORY_SEPARATOR);
 }
 
+/**
+ * Detects RRDtool command arguments that attempt path traversal, absolute paths, or
+ * embedded command framing (via null bytes/newlines) so such commands can be rejected.
+ *
+ * @param string $command
+ *
+ * @return bool
+ */
 function rrdp_command_has_unsafe_path($command) {
 	return str_contains($command, "\0")
 		|| str_contains($command, "\r")
@@ -301,6 +390,15 @@ function rrdp_command_has_unsafe_path($command) {
 		|| preg_match('~(^|[[:space:]=:,])(?:/|\\\\|[A-Za-z]:[\\\\/])~', $command) === 1;
 }
 
+/**
+ * Parses and whitelists removespikes CLI options from a client request, resolving
+ * the RRD file argument against the RRA root and rejecting anything unrecognized,
+ * malformed, or containing more than one RRD file argument.
+ *
+ * @param string $input
+ *
+ * @return array<int, string>|false
+ */
 function rrdp_parse_removespikes_options($input) {
 	$options     = str_getcsv($input, ' ', '"', '\\');
 	$result      = [];
@@ -348,6 +446,15 @@ function rrdp_parse_removespikes_options($input) {
 	return $has_rrdfile ? $result : false;
 }
 
+/**
+ * Runs an argv-style child process (no shell interpolation) and captures its
+ * combined stdout/stderr and exit status.
+ *
+ * @param array<int, string>        $command
+ * @param array<string, string>|null $environment
+ *
+ * @return array{status: int, stdout: string, stderr: string}|false
+ */
 function rrdp_run_process($command, $environment = null) {
 	$descriptors = [
 		1 => ['pipe', 'w'],
@@ -366,6 +473,16 @@ function rrdp_run_process($command, $environment = null) {
 	return ['status' => $status, 'stdout' => $stdout, 'stderr' => ''];
 }
 
+/**
+ * Atomically writes $contents to $path (via a temp file in the same directory,
+ * chmod'd before the rename) so the file never appears with the wrong permissions.
+ *
+ * @param string $path
+ * @param string $contents
+ * @param int    $mode
+ *
+ * @return int|false
+ */
 function rrdp_write_secure_file($path, $contents, $mode = 0600) {
 	$directory = dirname($path);
 	$temporary = tempnam($directory, '.rrdp-');
@@ -388,6 +505,18 @@ function rrdp_write_secure_file($path, $contents, $mode = 0600) {
 	return $written;
 }
 
+/**
+ * Validates that a public/private key pair actually match (by comparing
+ * fingerprints) and then atomically writes both files, restoring the previous
+ * private key if the public key write fails partway through.
+ *
+ * @param string $public_path
+ * @param string $public_key
+ * @param string $private_path
+ * @param string $private_key
+ *
+ * @return bool
+ */
 function rrdp_write_key_pair($public_path, $public_key, $private_path, $private_key) {
 	try {
 		$public_fingerprint  = RSA::loadPublicKey($public_key)->getFingerprint('sha256');
@@ -453,6 +582,15 @@ function rrdp_write_key_pair($public_path, $public_key, $private_path, $private_
 	return true;
 }
 
+/**
+ * Writes $output to a socket in a loop, retrying until every byte has been sent
+ * (socket_write() may perform a short write).
+ *
+ * @param resource|\Socket $socket
+ * @param string           $output
+ *
+ * @return int|false
+ */
 function rrdp_socket_write_all($socket, $output) {
 	$length  = strlen($output);
 	$written = 0;
@@ -470,6 +608,17 @@ function rrdp_socket_write_all($socket, $output) {
 	return $written;
 }
 
+/**
+ * Forwards a log message to the parent process over the IPC socket if it meets
+ * the configured severity/category thresholds for its logging location.
+ *
+ * @param int    $location
+ * @param string $msg
+ * @param string $category
+ * @param int    $severity
+ *
+ * @return void
+ */
 function __logging($location, $msg, $category, $severity) {
 	global $rrdp_config, $ipc_socket_parent, $ipc_global_resource_id, $c_pid;
 
@@ -481,14 +630,39 @@ function __logging($location, $msg, $category, $severity) {
 	}
 }
 
+/**
+ * Null/false-safe wrapper around sizeof().
+ *
+ * @param mixed $array
+ *
+ * @return int
+ */
 function __sizeof($array) {
 	return ($array === false || !is_array($array)) ? 0 : sizeof($array);
 }
 
+/**
+ * Null/false-safe wrapper around count().
+ *
+ * @param mixed $array
+ *
+ * @return int
+ */
 function __count($array) {
 	return ($array === false || !is_array($array)) ? 0 : count($array);
 }
 
+/**
+ * Custom error handler: logs PHP user-level errors/warnings/notices via __logging()
+ * and terminates the process on E_USER_ERROR.
+ *
+ * @param int    $code
+ * @param string $text
+ * @param string $file
+ * @param int    $line
+ *
+ * @return bool|null
+ */
 function __errorHandler($code, $text, $file, $line) {
 	if (!($code & error_reporting())) {
 		return null;
@@ -518,6 +692,13 @@ function __errorHandler($code, $text, $file, $line) {
 }
 
 // signal handler for master, slave and client processes
+/**
+ * Exits cleanly on SIGTERM; ignores SIGUSR1/SIGHUP and any other signal.
+ *
+ * @param int $signo
+ *
+ * @return void
+ */
 function __sig_handler($signo) {
 	switch ($signo) {
 		case SIGTERM:
@@ -531,12 +712,23 @@ function __sig_handler($signo) {
 	}
 }
 
+/**
+ * Checks (via `ps`) whether another rrdtool-proxy.php process is already running.
+ *
+ * @return bool
+ */
 function is_rrdtool_proxy_running() {
 	exec('ps -ef | grep -v grep | grep -E "php .*rrdtool-proxy.php"', $output);
 
 	return (__sizeof($output) >= 2) ? false : true;
 }
 
+/**
+ * Checks (via `ps`) whether an rrdcached process is already running, unless
+ * $force is set.
+ *
+ * @return bool
+ */
 function is_rrdcached_running() {
 	global $force;
 

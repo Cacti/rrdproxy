@@ -24,6 +24,15 @@
 
 use phpseclib4\Crypt\RSA;
 
+/**
+ * Main loop of the replicator engine: connects out to registered cluster peers
+ * and listens for inbound peer connections, authenticating each by RSA public-key
+ * fingerprint, then drives full and incremental (DIFF-based) synchronization with
+ * the peer that reports the highest uptime, servicing IPC requests from the
+ * parent process along the way.
+ *
+ * @return void
+ */
 function interact() {
 	global $rrdp_remoteproxies, $ipc_socket_parent, $debug_mode, $rrdp_config, $rrdp_remote_proxies;
 	global $rrdp_encryption, $rrdtool_cmds, $rrdtool_custom_cmds, $rrdp_replicator_cmds;
@@ -356,6 +365,16 @@ function interact() {
 }
 
 // internal function to establish an encrypted remote connection to registered peers
+/**
+ * Opens an outbound connection to a registered cluster peer, exchanges RSA public
+ * keys, and verifies the peer's key against its configured fingerprint.
+ *
+ * @param string $remote_ip
+ * @param int    $remote_port
+ * @param string $remote_fingerprint
+ *
+ * @return array{socket: resource|\Socket, ip: string, public_key: string, authenticated: bool, last_seen: int}|false
+ */
 function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 	global $rrdp_config, $rrdp_encryption;
 
@@ -410,6 +429,15 @@ function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 }
 
 // internal function to read the response of a registered peer to a previous request
+/**
+ * Reads and decrypts a registered peer's newline-delimited response packets,
+ * reassembling them until an END_OF_MSG marker is seen, and returns the parsed
+ * [command, status, payload] triple.
+ *
+ * @param resource|\Socket $read_socket
+ *
+ * @return array{0: string, 1: string, 2: string}|false
+ */
 function __remote_read($read_socket) {
 	global $rrdp_remoteproxies, $rrdp_encryption;
 
@@ -477,6 +505,15 @@ function __remote_read($read_socket) {
 	return false;
 }
 
+/**
+ * Dispatches a decoded replication request (STATUS, DIFF, etc.) received from a
+ * registered peer and writes the encrypted response back to that peer's socket.
+ *
+ * @param string           $input
+ * @param resource|\Socket $read_socket
+ *
+ * @return void
+ */
 function handle__request($input, $read_socket) {
 	global $rrdp_config, $rrdp_remoteproxies, $rrdp_encryption, $rrdcached_pid;
 	global $replicator_system_start, $rrdtool_process, $rrdtool_pipes;

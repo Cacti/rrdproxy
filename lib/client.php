@@ -24,6 +24,16 @@
 
 use phpseclib4\Crypt\RSA;
 
+/**
+ * Handles a single client connection for its entire lifetime: performs the RSA
+ * public-key handshake, then authenticates, decrypts, and dispatches each request
+ * (RRDtool commands, custom commands, and removespikes) to its handler, encrypting
+ * and writing back every response until the client disconnects or times out.
+ *
+ * @param resource|\Socket $socket_client
+ *
+ * @return void
+ */
 function interact($socket_client) {
 	/*
 		Clients using the default port are only allowed to talk to RRDtool directly.

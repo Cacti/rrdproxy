@@ -483,6 +483,14 @@ if ($html) {
 }
 
 // All Functions
+/**
+ * Restores an RRD file from its (spike-cleaned) XML dump via `rrdtool restore`.
+ *
+ * @param string $xmlfile
+ * @param string $rrdfile
+ *
+ * @return void
+ */
 function createRRDFileFromXML($xmlfile, $rrdfile) {
 	global $html, $rrdtool_path;
 
@@ -497,6 +505,15 @@ function createRRDFileFromXML($xmlfile, $rrdfile) {
 	}
 }
 
+/**
+ * Runs the rrdtool binary with the given argv-style arguments (no shell
+ * interpolation) and captures its combined stdout/stderr and exit status.
+ *
+ * @param string             $binary
+ * @param array<int, string> $arguments
+ *
+ * @return array{status: int, stdout: string, stderr: string}|false
+ */
 function removespikes_run_rrdtool($binary, $arguments) {
 	$descriptors = [
 		1 => ['pipe', 'w'],
@@ -515,10 +532,27 @@ function removespikes_run_rrdtool($binary, $arguments) {
 	return ['status' => $status, 'stdout' => $stdout, 'stderr' => ''];
 }
 
+/**
+ * Writes the (spike-cleaned) XML dump lines out to $xmlfile.
+ *
+ * @param array<int, string> $output
+ * @param string             $xmlfile
+ *
+ * @return int|false
+ */
 function writeXMLFile($output, $xmlfile) {
 	return file_put_contents($xmlfile, $output);
 }
 
+/**
+ * Copies $rrdfile into the configured (or temp) backup directory before it is
+ * modified, appending a random seed to the filename if a file of that name
+ * already exists there.
+ *
+ * @param string $rrdfile
+ *
+ * @return bool
+ */
 function backupRRDFile($rrdfile) {
 	global $using_cacti, $tempdir, $seed, $html;
 
@@ -543,6 +577,16 @@ function backupRRDFile($rrdfile) {
 	return copy($rrdfile, $backupdir . '/' . $newfile);
 }
 
+/**
+ * Computes each RRA/data-source's outlier-trimmed "variance" average (the mean
+ * of the samples after removing the top/bottom $outliers extremes), storing it
+ * into $rra[$rra_num][$ds_num]['variance_avg'].
+ *
+ * @param array<int, array<int, array<string, mixed>>>   $rra
+ * @param array<int, array<int, array<int, float|int>>>  $samples
+ *
+ * @return void
+ */
 function calculateVarianceAverages(&$rra, &$samples) {
 	global $outliers;
 
@@ -567,6 +611,17 @@ function calculateVarianceAverages(&$rra, &$samples) {
 	}
 }
 
+/**
+ * For every RRA/data-source, computes the standard deviation, average, and
+ * min/max cutoffs from the collected samples, then counts (and flags via
+ * $std_kills/$var_kills) how many samples fall outside the standard-deviation
+ * and variance thresholds.
+ *
+ * @param array<int, array<int, array<string, mixed>>>   $rra
+ * @param array<int, array<int, array<int, float|int>>>  $samples
+ *
+ * @return void
+ */
 function calculateOverallStatistics(&$rra, &$samples) {
 	global $percent, $stddev, $ds_min, $ds_max, $var_kills, $std_kills;
 
@@ -658,6 +713,14 @@ function calculateOverallStatistics(&$rra, &$samples) {
 	}
 }
 
+/**
+ * Prints a per-data-source summary table (plain text or HTML) of the computed
+ * statistics and kill counts for each RRA.
+ *
+ * @param array<int, array<int, array<string, mixed>>> $rra
+ *
+ * @return void
+ */
 function outputStatistics($rra) {
 	global $rra_cf, $rra_name, $ds_name, $rra_pdp, $html;
 
@@ -745,6 +808,16 @@ function outputStatistics($rra) {
 	}
 }
 
+/**
+ * Rewrites the dumped XML's <row> value lines, replacing any sample outside
+ * the computed thresholds with the RRA's average (or 'NaN'), up to $numspike
+ * replacements per RRA.
+ *
+ * @param array<int, string>                            $output
+ * @param array<int, array<int, array<string, mixed>>>  $rra
+ *
+ * @return array<int, string>
+ */
 function updateXML(&$output, &$rra) {
 	global $numspike, $percent, $avgnan, $method, $total_kills;
 
@@ -825,6 +898,14 @@ function updateXML(&$output, &$rra) {
 	return $new_array;
 }
 
+/**
+ * Strips blank lines and `<!-- ... -->` XML comments from a dumped RRD file's
+ * lines.
+ *
+ * @param array<int, string> $output
+ *
+ * @return array<int, string>|null
+ */
 function removeComments(&$output) {
 	$new_array = [];
 
@@ -861,6 +942,14 @@ function removeComments(&$output) {
 	}
 }
 
+/**
+ * Formats a PDP (primary data point) count as a human-readable duration
+ * (seconds, minutes, hours, or days) based on the RRD's step size.
+ *
+ * @param int $pdp
+ *
+ * @return string
+ */
 function displayTime($pdp) {
 	global $step;
 
@@ -887,6 +976,13 @@ function displayTime($pdp) {
 	}
 }
 
+/**
+ * Prints $string prefixed with "DEBUG: " when debug output is enabled.
+ *
+ * @param string $string
+ *
+ * @return void
+ */
 function debug($string) {
 	global $debug;
 
@@ -895,6 +991,13 @@ function debug($string) {
 	}
 }
 
+/**
+ * Computes the (population) standard deviation of a set of numeric samples.
+ *
+ * @param array<int, float|int> $samples
+ *
+ * @return float
+ */
 function standard_deviation($samples) {
 	$sample_count  = count($samples);
 	$sample_square = [];
@@ -907,6 +1010,11 @@ function standard_deviation($samples) {
 }
 
 // display_help - displays the usage of the function
+/**
+ * Prints removespikes' version banner and command-line usage/help text.
+ *
+ * @return void
+ */
 function display_help() {
 	global $using_cacti;
 
