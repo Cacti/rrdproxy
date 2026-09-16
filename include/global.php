@@ -1,7 +1,7 @@
 <?php
 /*
  +-------------------------------------------------------------------------+
- | Copyright (C) 2004-2024 The Cacti Group                                 |
+ | Copyright (C) 2004-2026 The Cacti Group                                 |
  |                                                                         |
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
@@ -27,7 +27,7 @@ define('COPYRIGHT_YEARS_SHORT', '(c) 2004-' . date('Y') . ' - The Cacti Group');
 
 define('RRDP_VERSION', '1.2.17');
 define('RRDP_VERSION_FULL', 'RRDtool Proxy Server v' . RRDP_VERSION . ', ' . COPYRIGHT_YEARS . "\r\n");
-define('RRDP_PHP_VERSION_REQUIRED', 80100);
+define('RRDP_PHP_VERSION_REQUIRED', 80200);
 
 define('RRD_OK', 'OK u:0.00');
 define('RRD_ERROR', 'ERROR:');
