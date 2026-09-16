@@ -22,7 +22,7 @@
  +-------------------------------------------------------------------------+
 */
 
-use phpseclib3\Crypt\RSA;
+use phpseclib4\Crypt\RSA;
 
 function interact($socket_client) {
 	/*

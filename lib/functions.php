@@ -22,9 +22,8 @@
  +-------------------------------------------------------------------------+
 */
 
-use phpseclib3\Crypt\Random;
-use phpseclib3\Crypt\Rijndael;
-use phpseclib3\Crypt\RSA;
+use phpseclib4\Crypt\Rijndael;
+use phpseclib4\Crypt\RSA;
 
 function rrdtool_pipe_init($rrdp_config) {
 	$fds = [
@@ -170,12 +169,12 @@ function encrypt($output, $rsa_key) {
 	try {
 		$public  = RSA::loadPublicKey($rsa_key);
 
-		if (!$public instanceof phpseclib3\Crypt\RSA\PublicKey) {
+		if (!$public instanceof phpseclib4\Crypt\RSA\PublicKey) {
 			return false;
 		}
 
 		$aes     = new Rijndael('cbc');
-		$aes_key = Random::string(32);
+		$aes_key = random_bytes(32);
 
 		$aes->setKey($aes_key);
 		$aes->setIV(str_repeat("\0", 16));
@@ -216,7 +215,7 @@ function decrypt($input) {
 	try {
 		$private = RSA::loadPrivateKey($rrdp_config['encryption']['private_key']);
 
-		if (!$private instanceof phpseclib3\Crypt\RSA\PrivateKey) {
+		if (!$private instanceof phpseclib4\Crypt\RSA\PrivateKey) {
 			return false;
 		}
 

@@ -26,7 +26,7 @@ global $active_config;
 
 include('../vendor/autoload.php');
 
-use phpseclib3\Crypt\RSA;
+use phpseclib4\Crypt\RSA;
 
 $active_config = [
 	'version'                   => RRDP_VERSION,

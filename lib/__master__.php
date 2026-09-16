@@ -22,6 +22,8 @@
  +-------------------------------------------------------------------------+
 */
 
+use phpseclib4\Crypt\RSA;
+
 function interact() {
 	global $rrdp_remoteproxies,
 	$ipc_socket_parent,
@@ -52,9 +54,6 @@ function interact() {
 
 	$rrdp_remoteproxies    = [];
 	$rrdp_replicator_state = 'running';
-
-	// enable message encryption
-	$rsa = new \phpseclib\Crypt\RSA();
 
 	// start listening for cluster peers
 	$rrdp_server = @socket_create((($rrdp_config['ipv6']) ? AF_INET : AF_INET), SOCK_STREAM, SOL_TCP);
@@ -250,9 +249,13 @@ function interact() {
 											$ip                = $rrdp_remoteproxies[$index]['ip'];
 											$rsa_finger_print  = isset($rrdp_remote_proxies[$ip]) ? $rrdp_remote_proxies[$ip]['fingerprint'] : 'unknown';
 
-											$rsa->loadKey($client_public_key);
+											try {
+												$remote_fingerprint = RSA::loadPublicKey($client_public_key)->getFingerprint('md5');
+											} catch (Throwable $e) {
+												$remote_fingerprint = false;
+											}
 
-											if ($rsa_finger_print == $rsa->getPublicKeyFingerprint()) {
+											if ($remote_fingerprint !== false && hash_equals(strtolower($rsa_finger_print), strtolower($remote_fingerprint))) {
 												// registered public key has been received
 												$rrdp_remoteproxies[$index]['authenticated'] = true;
 												$rrdp_remoteproxies[$index]['public_key']    = $client_public_key;
@@ -369,9 +372,6 @@ function interact() {
 function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 	global $rrdp_config, $rrdp_encryption;
 
-	// enable message encryption
-	$rsa = $rsa = new \phpseclib\Crypt\RSA();
-
 	$rrdp_socket = @socket_create((($rrdp_config['ipv6']) ? AF_INET6 : AF_INET), SOCK_STREAM, SOL_TCP);
 
 	if (@socket_connect($rrdp_socket, $remote_ip, $remote_port) === true) {
@@ -404,8 +404,11 @@ function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 			}
 		}
 
-		$rsa->loadKey($rrdp_public_key);
-		$fingerprint = $rsa->getPublicKeyFingerprint();
+		try {
+			$fingerprint = RSA::loadPublicKey($rrdp_public_key)->getFingerprint('md5');
+		} catch (Throwable $e) {
+			return false;
+		}
 
 		if ($remote_fingerprint != $fingerprint) {
 			// fingerprint mismatch

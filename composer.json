@@ -36,7 +36,7 @@
         "ext-posix": "*",
         "ext-sockets": "*",
         "pear/net_dns2": "^2.0",
-        "phpseclib/phpseclib": "^3.0"
+        "phpseclib/phpseclib": "^4.0"
     },
     "suggest": {
         "friendsofphp/php-cs-fixer": "^3.13"

@@ -61,7 +61,7 @@ check(rrdp_resolve_path_within($outside, '../rra/sample.rrd', false) === false, 
 $process = rrdp_run_process([PHP_BINARY, '-r', 'echo $argv[1];', ';touch-not-executed']);
 check($process !== false && $process['stdout'] === ';touch-not-executed', 'Process arguments must not be interpreted by a shell');
 
-$rsa_class = 'phpseclib3\\Crypt\\RSA';
+$rsa_class = 'phpseclib4\\Crypt\\RSA';
 set_error_handler(static function ($severity, $message) {
 	return str_contains($message, 'Unable to write random state');
 });
@@ -70,7 +70,7 @@ restore_error_handler();
 $encryption                               = true;
 $rrdp_config['encryption']['private_key'] = (string) $private;
 $frame                                    = encrypt('round trip', (string) $private->getPublicKey());
-check(is_string($frame) && decrypt($frame) === 'round trip', 'phpseclib 3 encryption must round-trip');
+check(is_string($frame) && decrypt($frame) === 'round trip', 'phpseclib 4 encryption must round-trip');
 check(decrypt('not-a-frame') === false, 'Malformed encrypted frames must fail closed');
 
 $secret = $test_root . '/private.key';
