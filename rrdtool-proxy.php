@@ -859,6 +859,16 @@ function rrdp_system__encryption_init() {
 	$rrdp_config['encryption']['private_key'] = file_get_contents('./include/private.key');
 	rrd_system__system_boolean_message('init: RSA private key', $rrdp_config['encryption']['private_key'], true);
 
+	try {
+		$public_fingerprint  = RSA::loadPublicKey($rrdp_config['encryption']['public_key'])->getFingerprint('sha256');
+		$private_fingerprint = RSA::loadPrivateKey($rrdp_config['encryption']['private_key'])->getPublicKey()->getFingerprint('sha256');
+	} catch (Throwable $e) {
+		$public_fingerprint = $private_fingerprint = false;
+	}
+
+	$keys_match = $public_fingerprint !== false && $private_fingerprint !== false && hash_equals($public_fingerprint, $private_fingerprint);
+	rrd_system__system_boolean_message('init: RSA public/private key pair matches', $keys_match, true);
+
 	$private                                             = RSA::loadPublicKey($rrdp_config['encryption']['public_key']);
 	$rrdp_config['encryption']['public_key_fingerprint'] = $private->getFingerprint('md5');
 }

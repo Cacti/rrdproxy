@@ -328,7 +328,7 @@ function rrdp_resolve_path_within($base_path, $path, $must_exist = true) {
 		return false;
 	}
 
-	$segments = preg_split('~[\\\\/]+~', $path);
+	$segments = preg_split('~[\\\\/]+~', $path, -1, PREG_SPLIT_NO_EMPTY);
 
 	if ($segments === false || in_array('..', $segments, true)) {
 		return false;
@@ -340,24 +340,42 @@ function rrdp_resolve_path_within($base_path, $path, $must_exist = true) {
 		return false;
 	}
 
-	$candidate = $base . DIRECTORY_SEPARATOR . ltrim($path, '/\\');
-	$resolved  = realpath($candidate);
+	if ($must_exist) {
+		$resolved = realpath($base . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $segments));
 
-	if ($resolved === false && !$must_exist) {
-		$ancestor = dirname($candidate);
-
-		while (!file_exists($ancestor) && $ancestor !== dirname($ancestor)) {
-			$ancestor = dirname($ancestor);
-		}
-
-		$resolved_ancestor = realpath($ancestor);
-
-		if ($resolved_ancestor === false || !rrdp_path_is_within($resolved_ancestor, $base)) {
-			return false;
-		}
-
-		return $candidate;
+		return $resolved !== false && rrdp_path_is_within($resolved, $base) ? $resolved : false;
 	}
+
+	// Walk the path one segment at a time (instead of only checking the nearest
+	// existing ancestor) so that a symlink anywhere along a not-yet-fully-existing
+	// path is resolved and confined, even if the symlink itself is dangling.
+	$walked = $base;
+
+	for ($i = 0; $i < count($segments); $i++) {
+		$next = $walked . DIRECTORY_SEPARATOR . $segments[$i];
+
+		if (is_link($next)) {
+			$resolved_link = realpath($next);
+
+			if ($resolved_link === false || !rrdp_path_is_within($resolved_link, $base)) {
+				return false;
+			}
+
+			$walked = $resolved_link;
+
+			continue;
+		}
+
+		if (!file_exists($next)) {
+			// the remaining segments are the not-yet-created portion of the path
+			return $walked . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, array_slice($segments, $i));
+		}
+
+		$walked = $next;
+	}
+
+	// the full path already exists; confirm its canonical form is still confined
+	$resolved = realpath($walked);
 
 	return $resolved !== false && rrdp_path_is_within($resolved, $base) ? $resolved : false;
 }
@@ -377,6 +395,10 @@ function rrdp_path_is_within($path, $base) {
 /**
  * Detects RRDtool command arguments that attempt path traversal, absolute paths, or
  * embedded command framing (via null bytes/newlines) so such commands can be rejected.
+ * This is a lexical, framing-level check only: it does not resolve operands against
+ * the filesystem, so it cannot by itself catch a symlink placed inside the RRA root
+ * that points outside it. Callers must also pass the command through
+ * rrdp_resolve_command_paths() before dispatching it to RRDtool.
  *
  * @param string $command
  *
@@ -388,6 +410,79 @@ function rrdp_command_has_unsafe_path($command) {
 		|| str_contains($command, "\n")
 		|| preg_match('~(^|[[:space:]=:,\\\\/])\.\.([\\\\/]|$)~', $command)        === 1
 		|| preg_match('~(^|[[:space:]=:,])(?:/|\\\\|[A-Za-z]:[\\\\/])~', $command) === 1;
+}
+
+/**
+ * Resolves every RRD file path operand referenced by an RRDtool command (the
+ * leading bare file argument(s), e.g. for update/fetch/dump/restore, and any
+ * DEF:/SDEF: clauses used by graph/graphv/xport) against the RRA root, and
+ * rewrites the command to use the canonical resolved paths. This closes the gap
+ * left by rrdp_command_has_unsafe_path(): resolving through realpath() follows
+ * (and thereby confines) symlinks instead of only rejecting lexical traversal.
+ *
+ * @param string $cmd
+ * @param string $cmd_options
+ *
+ * @return string|false
+ */
+function rrdp_resolve_command_paths($cmd, $cmd_options) {
+	static $leading_file_operands = [
+		'create'      => [false],
+		'update'      => [true],
+		'updatev'     => [true],
+		'dump'        => [true],
+		'restore'     => [true, false],
+		'last'        => [true],
+		'lastupdate'  => [true],
+		'first'       => [true],
+		'info'        => [true],
+		'fetch'       => [true],
+		'tune'        => [true],
+		'resize'      => [true],
+		'graph'       => [false],
+		'graphv'      => [false],
+		'flushcached' => [true],
+	];
+
+	$tokens = preg_split('/\s+/', trim((string) $cmd_options), -1, PREG_SPLIT_NO_EMPTY);
+
+	if ($tokens === false) {
+		return false;
+	}
+
+	$must_exist_list = $leading_file_operands[$cmd] ?? [];
+	$operand_index    = 0;
+
+	foreach ($tokens as $index => $token) {
+		if (preg_match('/^((?:DEF|SDEF):[^=]+=)([^:]+)(:.*)$/i', $token, $matches) === 1) {
+			$resolved = rrdp_resolve_rra_path($matches[2]);
+
+			if ($resolved === false) {
+				return false;
+			}
+
+			$tokens[$index] = $matches[1] . $resolved . $matches[3];
+
+			continue;
+		}
+
+		if ($token[0] === '-' || preg_match('/^(?:CDEF|VDEF):/i', $token) === 1) {
+			continue;
+		}
+
+		if ($operand_index < count($must_exist_list)) {
+			$resolved = rrdp_resolve_rra_path($token, $must_exist_list[$operand_index]);
+
+			if ($resolved === false) {
+				return false;
+			}
+
+			$tokens[$index] = $resolved;
+			$operand_index++;
+		}
+	}
+
+	return implode(' ', $tokens);
 }
 
 /**

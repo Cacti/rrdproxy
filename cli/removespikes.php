@@ -466,7 +466,10 @@ if (!$dryrun) {
 	if ($total_kills) {
 		if (writeXMLFile($new_output, $xmlfile)) {
 			if (backupRRDFile($rrdfile)) {
-				createRRDFileFromXML($xmlfile, $rrdfile);
+				if (!createRRDFileFromXML($xmlfile, $rrdfile)) {
+					print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "FATAL: Unable to restore '$rrdfile' from '$xmlfile'" . ($html ? "</td></tr>\n" : "\n");
+					exit(-14);
+				}
 			} else {
 				print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "FATAL: Unable to backup '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 			}
@@ -489,7 +492,7 @@ if ($html) {
  * @param string $xmlfile
  * @param string $rrdfile
  *
- * @return void
+ * @return bool
  */
 function createRRDFileFromXML($xmlfile, $rrdfile) {
 	global $html, $rrdtool_path;
@@ -503,6 +506,8 @@ function createRRDFileFromXML($xmlfile, $rrdfile) {
 	if (strlen($response)) {
 		print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . $response . ($html ? "</td></tr>\n" : "\n");
 	}
+
+	return $result !== false && $result['status'] === 0;
 }
 
 /**

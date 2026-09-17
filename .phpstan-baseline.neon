@@ -1,0 +1,199 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Function removeComments\(\) should return array\<int, string\>\|null but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: cli/removespikes.php
+
+		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 3
+			path: cli/removespikes.php
+
+		-
+			message: '#^Offset ''cacti_server_os'' does not exist on array\{\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: cli/removespikes.php
+
+		-
+			message: '#^Parameter \#2 \$descriptor_spec of function proc_open expects array\<1\|2, list\<string\>\|resource\>, array\{1\: array\{''pipe'', ''w''\}, 2\: array\{''redirect'', 1\}\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: cli/removespikes.php
+
+		-
+			message: '#^Parameter \#1 \$num of function abs expects float\|int, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: lib/client.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: lib/functions.php
+
+		-
+			message: '#^Parameter \#2 \$descriptor_spec of function proc_open expects array\<1\|2, list\<string\>\|resource\>, array\{1\: array\{''pipe'', ''w''\}, 2\: array\{''redirect'', 1\}\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: lib/functions.php
+
+		-
+			message: '#^Parameter \#2 \$enable of function stream_set_blocking expects bool, int given\.$#'
+			identifier: argument.type
+			count: 2
+			path: lib/functions.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 2
+			path: lib/functions.php
+
+		-
+			message: '#^Comparison operation "\<" between int\<80200, 80599\> and 80200 is always false\.$#'
+			identifier: smaller.alwaysFalse
+			count: 1
+			path: lib/wizard.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between false and false will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: lib/wizard.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: lib/wizard.php
+
+		-
+			message: '#^Call to function in_array\(\) with arguments numeric\-string, array\{0, 1, 2, 3, 4, 5, 6, 7\} and true will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Call to function in_array\(\) with arguments numeric\-string, array\{0\: 0, 1\: 1, 2\: 2, 3\: 3, 4\: 4, 5\: 5, 6\: 6, 7\: 7, \.\.\.\} and true will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Call to function is_array\(\) with list\<string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Call to function is_array\(\) with non\-empty\-list\<string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Comparison operation "\<" between int\<80200, 80599\> and 80200 is always false\.$#'
+			identifier: smaller.alwaysFalse
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Comparison operation "\>\=" between int\<80200, 80599\> and 80000 is always true\.$#'
+			identifier: greaterOrEqual.alwaysTrue
+			count: 2
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Function handle_child_processes\(\) has parameter \$ipc_sockets with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Parameter \#1 \$socket of function socket_close expects Socket, bool given\.$#'
+			identifier: argument.type
+			count: 3
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Parameter \#1 \$socket of function socket_shutdown expects Socket, bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Parameter \#1 \$socket_client of function interact expects resource\|Socket, bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Parameter \#3 \$ssock of function handle_child_processes expects bool, Socket given\.$#'
+			identifier: argument.type
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between ''undefined'' and ''undefined'' will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and false will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between true and false will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between Socket and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Ternary operator condition is always false\.$#'
+			identifier: ternary.alwaysFalse
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^Variable \$arg in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.variable
+			count: 1
+			path: rrdtool-proxy.php
+
+		-
+			message: '#^While loop condition is always true\.$#'
+			identifier: while.alwaysTrue
+			count: 1
+			path: rrdtool-proxy.php

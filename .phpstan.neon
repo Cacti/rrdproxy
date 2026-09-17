@@ -1,7 +1,10 @@
+includes:
+	- .phpstan-baseline.neon
+
 parameters:
 	parallel:
 		maximumNumberOfProcesses: 1
-	level: 2
+	level: 6
 	paths:
 		- include/global.php
 		- lib/client.php

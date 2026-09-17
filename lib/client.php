@@ -121,14 +121,6 @@ function interact($socket_client) {
 							$input .= $recv;
 							$max_input_size = $client_authenticated ? RRDP_MAX_REQUEST_SIZE : RRDP_MAX_KEY_SIZE;
 
-							if (strlen($input) > $max_input_size) {
-								rrdp_system__socket_write($socket_client, (($client_authenticated) ? encrypt(RRD_ERROR . ' Request too large', $client_public_key) : RRD_ERROR . ' Request too large') . $end_of_sequence);
-								__logging(LOGGING_LOCATION_BUFFERED, 'Client request exceeded the maximum frame size', 'IPC', SEVERITY_LEVEL_WARNING);
-								$rrdp_status['status'] = 'CLOSEDOWN_BY_VIOLATION';
-
-								break 3;
-							}
-
 							if (strpos($input, $end_of_sequence) !== false) { // end of one or more transactions detected
 								rrdp_system__count('bytes_received', rrdp_system__calc_bytes($input));
 
@@ -136,6 +128,14 @@ function interact($socket_client) {
 								$input        = array_pop($transactions);
 
 								foreach ($transactions as $transaction) {
+									if (strlen($transaction) > $max_input_size) {
+										rrdp_system__socket_write($socket_client, (($client_authenticated) ? encrypt(RRD_ERROR . ' Request too large', $client_public_key) : RRD_ERROR . ' Request too large') . $end_of_sequence);
+										__logging(LOGGING_LOCATION_BUFFERED, 'Client request exceeded the maximum frame size', 'IPC', SEVERITY_LEVEL_WARNING);
+										$rrdp_status['status'] = 'CLOSEDOWN_BY_VIOLATION';
+
+										break 4;
+									}
+
 									if (!$client_authenticated) {
 										if (strpos($transaction, '-----BEGIN PUBLIC KEY-----') === false) {
 											// authentication failed !!!
@@ -221,6 +221,17 @@ function interact($socket_client) {
 
 												continue;
 											}
+
+											$resolved_cmd_options = rrdp_resolve_command_paths($cmd, $cmd_options);
+
+											if ($resolved_cmd_options === false) {
+												rrdp_system__socket_write($socket_client, encrypt(RRD_ERROR . ' Unsafe path or command framing', $client_public_key) . $end_of_sequence);
+												rrdp_system__count('queries_rrdtool_invalid');
+
+												continue;
+											}
+
+											$cmd_options = $resolved_cmd_options;
 
 											rrdp_system__count('queries_rrdtool_total');
 
@@ -502,6 +513,14 @@ function interact($socket_client) {
 											break 4;
 										}
 									}
+								}
+
+								if (strlen($input) > $max_input_size) {
+									rrdp_system__socket_write($socket_client, (($client_authenticated) ? encrypt(RRD_ERROR . ' Request too large', $client_public_key) : RRD_ERROR . ' Request too large') . $end_of_sequence);
+									__logging(LOGGING_LOCATION_BUFFERED, 'Client request exceeded the maximum frame size', 'IPC', SEVERITY_LEVEL_WARNING);
+									$rrdp_status['status'] = 'CLOSEDOWN_BY_VIOLATION';
+
+									break 3;
 								}
 							}
 						}

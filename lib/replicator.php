@@ -96,6 +96,12 @@ function interact() {
 		if ($rrdtool_process === false) {
 			$rrdtool_process_pipes = rrdtool_pipe_init($rrdp_config);
 
+			if ($rrdtool_process_pipes === false) {
+				rrdp_system__count('rrd_pipe_broken');
+
+				continue;
+			}
+
 			$rrdtool_process = $rrdtool_process_pipes[0];
 			$rrdtool_pipes   = $rrdtool_process_pipes[1];
 		}
@@ -701,29 +707,32 @@ function handle__request($input, $read_socket) {
 							$file_size = $file_settings[2];
 							$mtime     = $file_settings[3];
 
-							if ($folder != './') {
-								$rra_subfolder = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($folder, './');
+							$rra_relative_path      = ($folder !== './' ? ltrim($folder, './') . '/' : '') . $file;
+							$rra_file_path_absolute = rrdp_resolve_rra_path($rra_relative_path, false);
 
-								$rra_file_path_absolute = $rra_subfolder . '/' . $file;
+							if ($rra_file_path_absolute === false) {
+								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: rejected unsafe peer-supplied path: ' . $rra_relative_path, 'MSR', SEVERITY_LEVEL_CRITICAL);
 
-								// create subfolder if not already existing
-								if (!is_dir($rra_subfolder)) {
-									if (mkdir($rra_subfolder) === false) {
-										__logging(LOGGING_LOCATION_BUFFERED, 'Cannot create RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
-									} else {
-										__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: created: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
-									}
+								continue;
+							}
 
-									if (touch($rra_subfolder, $mtime) === false) {
-										__logging(LOGGING_LOCATION_BUFFERED, 'Cannot set modification time for RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
-									} else {
-										__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: set mtime: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
-									}
+							$rra_subfolder = dirname($rra_file_path_absolute);
 
-									__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: restored: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_INFORMATION);
+							// create subfolder if not already existing
+							if ($folder !== './' && !is_dir($rra_subfolder)) {
+								if (mkdir($rra_subfolder, 0755, true) === false) {
+									__logging(LOGGING_LOCATION_BUFFERED, 'Cannot create RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
+								} else {
+									__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: created: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
 								}
-							} else {
-								$rra_file_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . $file;
+
+								if (touch($rra_subfolder, $mtime) === false) {
+									__logging(LOGGING_LOCATION_BUFFERED, 'Cannot set modification time for RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
+								} else {
+									__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: set mtime: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
+								}
+
+								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: restored: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_INFORMATION);
 							}
 
 							if (!file_exists($rra_file_path_absolute)) {
@@ -743,7 +752,7 @@ function handle__request($input, $read_socket) {
 
 										file_put_contents($rra_file_path_absolute . '.xml', $rrd_data);
 
-										$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $folder . '/' . $file . "\r\n", $rrdtool_pipes, false, false, false, true);
+										$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $rra_file_path_absolute . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 										if ($rrd_exec_status) {
 											touch($rra_file_path_absolute, $mtime);
@@ -759,7 +768,7 @@ function handle__request($input, $read_socket) {
 								/* file is already existing - in this case we have to compare
 								 * local and remote last update time of this file */
 
-								$rrd_return = rrdtool_pipe_execute('last ' . rtrim($folder, '/') . '/' . $file . "\r\n", $rrdtool_pipes, false, false, false);
+								$rrd_return = rrdtool_pipe_execute('last ' . $rra_file_path_absolute . "\r\n", $rrdtool_pipes, false, false, false);
 
 								if (substr_count($rrd_return, 'OK u')) {
 									$local_last = rtrim(substr($rrd_return, 0, strpos($rrd_return, 'OK u')));
@@ -795,7 +804,7 @@ function handle__request($input, $read_socket) {
 												[$payload,$mtime] = explode(':__filemtime__:', $response[2]);
 												$rrd_data         = substr($payload, 0, strpos($payload, 'OK u'));
 												file_put_contents($rra_file_path_absolute . '.xml', $rrd_data);
-												$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $folder . '/' . $file . ".tmp\r\n", $rrdtool_pipes, false, false, false, true);
+												$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $rra_file_path_absolute . ".tmp\r\n", $rrdtool_pipes, false, false, false, true);
 
 												if ($rrd_exec_status) {
 													unlink($rra_file_path_absolute);
@@ -825,11 +834,11 @@ function handle__request($input, $read_socket) {
 			break;
 		case 'RRDLAST':
 			if ($cmd_options && is_array($cmd_options) && substr($cmd_options[0],-3) == 'rrd') {
-				$rra_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($cmd_options[0], './');
+				$rra_path_absolute = rrdp_resolve_rra_path($cmd_options[0]);
 
-				if (file_exists($rra_path_absolute)) {
+				if ($rra_path_absolute !== false) {
 					if ($rrdcached_pid) {
-						$rrd_cmd = 'flushcached ' . $cmd_options[0];
+						$rrd_cmd = 'flushcached ' . $rra_path_absolute;
 
 						$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, false, false, false, true);
 
@@ -841,7 +850,7 @@ function handle__request($input, $read_socket) {
 						}
 					}
 
-					$rrd_cmd = 'last ' . $cmd_options[0];
+					$rrd_cmd = 'last ' . $rra_path_absolute;
 					rrdp_system__socket_write($read_socket, encrypt('__RRDLAST 201 ', $public_key) . "\r\n", 'msr_bytes_sent');
 					$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, $read_socket, $public_key, 1);
 					rrdp_system__socket_write($read_socket, encrypt(' END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
@@ -862,11 +871,11 @@ function handle__request($input, $read_socket) {
 			break;
 		case 'RRDDUMP':
 			if ($cmd_options && is_array($cmd_options) && substr($cmd_options[0],-3) == 'rrd') {
-				$rra_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($cmd_options[0], './');
+				$rra_path_absolute = rrdp_resolve_rra_path($cmd_options[0]);
 
-				if (file_exists($rra_path_absolute)) {
+				if ($rra_path_absolute !== false) {
 					if ($rrdcached_pid) {
-						$rrd_cmd         = 'flushcached ' . $cmd_options[0];
+						$rrd_cmd         = 'flushcached ' . $rra_path_absolute;
 						$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 						if (!$rrd_exec_status) {
@@ -877,7 +886,7 @@ function handle__request($input, $read_socket) {
 						}
 					}
 
-					$rrd_cmd = 'dump ' . $cmd_options[0];
+					$rrd_cmd = 'dump ' . $rra_path_absolute;
 					rrdp_system__socket_write($read_socket, encrypt('__RRDDUMP 201 ', $public_key) . "\r\n", 'msr_bytes_sent');
 					$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, $read_socket, $public_key, 1);
 					rrdp_system__socket_write($read_socket, encrypt(':__filemtime__:' . filemtime($rra_path_absolute) . ' END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
