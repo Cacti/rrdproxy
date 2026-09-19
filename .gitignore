@@ -1,4 +1,6 @@
 .git*
+!.github/
+!.gitattributes
 
 locales/po/*.mo
 vendor/**

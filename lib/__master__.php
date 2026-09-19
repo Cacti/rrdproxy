@@ -22,6 +22,16 @@
  +-------------------------------------------------------------------------+
 */
 
+use phpseclib4\Crypt\RSA;
+
+/**
+ * Main loop of the replication master process: listens for and authenticates
+ * inbound cluster peer connections (verifying each peer's RSA public-key
+ * fingerprint), services IPC requests from the parent process, and drives the
+ * persistent RRDtool pipe used to answer replication requests.
+ *
+ * @return void
+ */
 function interact() {
 	global $rrdp_remoteproxies,
 	$ipc_socket_parent,
@@ -52,9 +62,6 @@ function interact() {
 
 	$rrdp_remoteproxies    = [];
 	$rrdp_replicator_state = 'running';
-
-	// enable message encryption
-	$rsa = new \phpseclib\Crypt\RSA();
 
 	// start listening for cluster peers
 	$rrdp_server = @socket_create((($rrdp_config['ipv6']) ? AF_INET : AF_INET), SOCK_STREAM, SOL_TCP);
@@ -98,6 +105,13 @@ function interact() {
 		// setup a dedicated persistent RRD_PIPE
 		if ($rrdtool_process === false) {
 			$rrdtool_process_pipes	 = rrdtool_pipe_init($rrdp_config);
+
+			if ($rrdtool_process_pipes === false) {
+				rrdp_system__count('rrd_pipe_broken');
+
+				continue;
+			}
+
 			$rrdtool_process		      = $rrdtool_process_pipes[0];
 			$rrdtool_pipes			       = $rrdtool_process_pipes[1];
 		}
@@ -127,12 +141,15 @@ function interact() {
 
 					// verify authorization
 					if (array_key_exists($ip, $rrdp_remote_proxies) === true) {
-						$key                      = intval($socket_descriptor);
+						$key = intval($socket_descriptor);
+
 						$rrdp_remoteproxies[$key] = [ 'socket' => $socket_descriptor, 'ip' => $ip, 'public_key' => false, 'authenticated' => false, 'last_seen' => time()];
+
 						__logging(LOGGING_LOCATION_BUFFERED, 'Remote Proxy connection request #' . $key . '[IP: ' . $ip . '] granted', 'ACL', SEVERITY_LEVEL_DEBUG);
 					} else {
 						@socket_write($socket_descriptor, "ERROR: Access denied.\r\n");
 						@socket_close($socket_descriptor);
+
 						rrdp_system__count('connections_refused');
 						__logging(LOGGING_LOCATION_BUFFERED, 'Remote Proxy connection request [IP: ' . $ip . '] rejected.', 'ACL', SEVERITY_LEVEL_WARNING);
 					}
@@ -250,9 +267,13 @@ function interact() {
 											$ip                = $rrdp_remoteproxies[$index]['ip'];
 											$rsa_finger_print  = isset($rrdp_remote_proxies[$ip]) ? $rrdp_remote_proxies[$ip]['fingerprint'] : 'unknown';
 
-											$rsa->loadKey($client_public_key);
+											try {
+												$remote_fingerprint = RSA::loadPublicKey($client_public_key)->getFingerprint('md5');
+											} catch (Throwable $e) {
+												$remote_fingerprint = false;
+											}
 
-											if ($rsa_finger_print == $rsa->getPublicKeyFingerprint()) {
+											if ($remote_fingerprint !== false && hash_equals(strtolower($rsa_finger_print), strtolower($remote_fingerprint))) {
 												// registered public key has been received
 												$rrdp_remoteproxies[$index]['authenticated'] = true;
 												$rrdp_remoteproxies[$index]['public_key']    = $client_public_key;
@@ -287,7 +308,8 @@ function interact() {
 											}
 
 											if (substr_count($output, 'END_OF_MSG')) {
-												$output                                  = str_replace('END_OF_MSG', '', $output);
+												$output = str_replace('END_OF_MSG', '', $output);
+
 												$rrdp_remoteproxies[$index]['last_seen'] = time();
 
 												break 2;
@@ -338,9 +360,11 @@ function interact() {
 
 					if ($remote_index) {
 						$rrdp_replicator_state = 'synchronizing';
-						$read_socket           = $rrdp_remoteproxies[$remote_index]['socket'];
-						$public_key            = $rrdp_remoteproxies[$remote_index]['public_key'];
-						$ip                    = $rrdp_remoteproxies[$remote_index]['ip'];
+
+						$read_socket = $rrdp_remoteproxies[$remote_index]['socket'];
+						$public_key  = $rrdp_remoteproxies[$remote_index]['public_key'];
+						$ip          = $rrdp_remoteproxies[$remote_index]['ip'];
+
 						__logging(LOGGING_LOCATION_BUFFERED, 'Start full synchronisation process with #' . intval($read_socket) . ' [IP: ' . $ip . ']', 'MSR', SEVERITY_LEVEL_NOTIFICATION);
 						rrdp_system__socket_write($read_socket, encrypt('FULLSCAN END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
 					} else {
@@ -366,11 +390,18 @@ function interact() {
 }
 
 // internal function to establish an encrypted remote connection to registered peers
+/**
+ * Opens an outbound connection to a registered cluster peer, exchanges RSA public
+ * keys, and verifies the peer's key against its configured fingerprint.
+ *
+ * @param string $remote_ip
+ * @param int    $remote_port
+ * @param string $remote_fingerprint
+ *
+ * @return array{socket: resource|\Socket, ip: string, public_key: string, authenticated: bool, last_seen: int}|false
+ */
 function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 	global $rrdp_config, $rrdp_encryption;
-
-	// enable message encryption
-	$rsa = $rsa = new \phpseclib\Crypt\RSA();
 
 	$rrdp_socket = @socket_create((($rrdp_config['ipv6']) ? AF_INET6 : AF_INET), SOCK_STREAM, SOL_TCP);
 
@@ -404,8 +435,11 @@ function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 			}
 		}
 
-		$rsa->loadKey($rrdp_public_key);
-		$fingerprint = $rsa->getPublicKeyFingerprint();
+		try {
+			$fingerprint = RSA::loadPublicKey($rrdp_public_key)->getFingerprint('md5');
+		} catch (Throwable $e) {
+			return false;
+		}
 
 		if ($remote_fingerprint != $fingerprint) {
 			// fingerprint mismatch
@@ -419,6 +453,15 @@ function __remote_connect($remote_ip, $remote_port, $remote_fingerprint) {
 }
 
 // internal function to read the response of a registered peer to a previous request
+/**
+ * Reads and decrypts a registered peer's newline-delimited response packets,
+ * reassembling them until an END_OF_MSG marker is seen, and returns the parsed
+ * [command, status, payload] triple.
+ *
+ * @param resource|\Socket $read_socket
+ *
+ * @return array{0: string, 1: string, 2: string}|false
+ */
 function __remote_read($read_socket) {
 	global $rrdp_remoteproxies, $rrdp_encryption;
 
@@ -460,8 +503,9 @@ function __remote_read($read_socket) {
 
 					if ($first_packet) {
 						[$cmd, $status, $payload] = explode(' ', $packet, 3);
-						$first_packet             = false;
-						$packet                   = $payload;
+
+						$first_packet = false;
+						$packet       = $payload;
 					}
 
 					if (substr_count($packet, 'END_OF_MSG')) {
@@ -485,6 +529,15 @@ function __remote_read($read_socket) {
 	return false;
 }
 
+/**
+ * Dispatches a decoded replication request (STATUS, DIFF, etc.) received from a
+ * registered peer and writes the encrypted response back to that peer's socket.
+ *
+ * @param string           $input
+ * @param resource|\Socket $read_socket
+ *
+ * @return void
+ */
 function handle__request($input, $read_socket) {
 	global $rrdp_config, $rrdp_remoteproxies, $rrdp_encryption, $rrdcached_pid, $replicator_system_start, $rrdtool_process, $rrdtool_pipes;
 
@@ -655,39 +708,39 @@ function handle__request($input, $read_socket) {
 						foreach ($scan as $line) {
 							$file_settings = explode(',', $line);
 
-							$folder 	    = $file_settings[0];
-							$file 		     = $file_settings[1];
-							$file_size 	 = $file_settings[2];
-							$mtime 		    = $file_settings[3];
+							$folder    = $file_settings[0];
+							$file      = $file_settings[1];
+							$file_size = $file_settings[2];
+							$mtime     = $file_settings[3];
 
-							if ($folder != './') {
-								$rra_subfolder          = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($folder, './');
-								$rra_file_path_absolute = $rra_subfolder . '/' . $file;
+						$rra_relative_path      = ($folder !== './' ? ltrim($folder, './') . '/' : '') . $file;
+						$rra_file_path_absolute = rrdp_resolve_rra_path($rra_relative_path, false);
 
-								// create subfolder if not already existing
-								if (!is_dir($rra_subfolder)) {
-									if (mkdir($rra_subfolder) === false) {
-										__logging(LOGGING_LOCATION_BUFFERED, 'Cannot create RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
-									} else {
-										__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: created: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
-									}
+						if ($rra_file_path_absolute === false) {
+							__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: rejected unsafe peer-supplied path: ' . $rra_relative_path, 'MSR', SEVERITY_LEVEL_CRITICAL);
 
-									if (touch($rra_subfolder, $mtime) === false) {
-										__logging(LOGGING_LOCATION_BUFFERED, 'Cannot set modification time for RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
-									} else {
-										__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: set mtime: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
-									}
-									__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: restored: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_INFORMATION);
-								}
+							continue;
+						}
+
+						$rra_subfolder = dirname($rra_file_path_absolute);
+
+						// create subfolder if not already existing
+						if ($folder !== './' && !is_dir($rra_subfolder)) {
+							if (mkdir($rra_subfolder, 0755, true) === false) {
+								__logging(LOGGING_LOCATION_BUFFERED, 'Cannot create RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
 							} else {
-								$rra_file_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . $file;
+								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: created: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
 							}
 
-							if (!file_exists($rra_file_path_absolute)) {
-								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: file not found: ' . $rra_file_path_absolute , 'MSR', SEVERITY_LEVEL_DEBUG);
-
+							if (touch($rra_subfolder, $mtime) === false) {
+								__logging(LOGGING_LOCATION_BUFFERED, 'Cannot set modification time for RRA subfolder: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_CRITICAL);
+							} else {
+								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: set mtime: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_DEBUG);
+							}
+							__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: restored: ' . $rra_subfolder , 'MSR', SEVERITY_LEVEL_INFORMATION);
 								// request the complete dump of that RRDfile
 								$msg = 'RRDDUMP ' . rtrim($folder, '/') . '/' . $file;
+
 								rrdp_system__socket_write($read_socket, encrypt($msg . ' END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
 								__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: sent data request: ' . $msg , 'MSR', SEVERITY_LEVEL_DEBUG);
 
@@ -696,14 +749,20 @@ function handle__request($input, $read_socket) {
 								if ($response !== false) {
 									if (substr_count($response[2], 'OK u')) {
 										[$payload,$mtime] = explode(':__filemtime__:', $response[2]);
-										$rrd_data         = substr($payload, 0, strpos($payload, 'OK u'));
+
+										$rrd_data = substr($payload, 0, strpos($payload, 'OK u'));
+
 										file_put_contents($rra_file_path_absolute . '.xml', $rrd_data);
-										$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $folder . '/' . $file . "\r\n", $rrdtool_pipes, false, false, false, true);
+
+										$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $rra_file_path_absolute . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 										if ($rrd_exec_status) {
 											touch($rra_file_path_absolute, $mtime);
+
 											$memory_table[$rra_file_path_absolute] = $mtime;
+
 											unlink($rra_file_path_absolute . '.xml');
+
 											__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: file restored: ' . $rra_file_path_absolute , 'MSR', SEVERITY_LEVEL_DEBUG);
 										} else {
 											__logging(LOGGING_LOCATION_BUFFERED, 'SYNC: file restoral failed: ' . $rra_file_path_absolute , 'MSR', SEVERITY_LEVEL_CRITICAL);
@@ -714,7 +773,7 @@ function handle__request($input, $read_socket) {
 								/* file is already existing - in this case we have to compare
 								 * local and remote last update time of this file */
 
-								$rrd_return = rrdtool_pipe_execute('last ' . rtrim($folder, '/') . '/' . $file . "\r\n", $rrdtool_pipes, false, false, false);
+								$rrd_return = rrdtool_pipe_execute('last ' . $rra_file_path_absolute . "\r\n", $rrdtool_pipes, false, false, false);
 
 								if (substr_count($rrd_return, 'OK u')) {
 									$local_last = rtrim(substr($rrd_return, 0, strpos($rrd_return, 'OK u')));
@@ -747,9 +806,12 @@ function handle__request($input, $read_socket) {
 										if ($response !== false) {
 											if (substr_count($response[2], 'OK u')) {
 												[$payload,$mtime] = explode(':__filemtime__:', $response[2]);
+
 												$rrd_data         = substr($payload, 0, strpos($payload, 'OK u'));
+
 												file_put_contents($rra_file_path_absolute . '.xml', $rrd_data);
-												$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $folder . '/' . $file . ".tmp\r\n", $rrdtool_pipes, false, false, false, true);
+
+$rrd_exec_status = rrdtool_pipe_execute('restore ' . $rra_file_path_absolute . '.xml ' . $rra_file_path_absolute . ".tmp\r\n", $rrdtool_pipes, false, false, false, true);
 
 												if ($rrd_exec_status) {
 													unlink($rra_file_path_absolute);
@@ -779,11 +841,11 @@ function handle__request($input, $read_socket) {
 			break;
 		case 'RRDLAST':
 			if ($cmd_options && is_array($cmd_options) && substr($cmd_options[0],-3) == 'rrd') {
-				$rra_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($cmd_options[0], './');
+				$rra_path_absolute = rrdp_resolve_rra_path($cmd_options[0]);
 
-				if (file_exists($rra_path_absolute)) {
+				if ($rra_path_absolute !== false) {
 					if ($rrdcached_pid) {
-						$rrd_cmd         = 'flushcached ' . $cmd_options[0];
+						$rrd_cmd         = 'flushcached ' . $rra_path_absolute;
 						$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 						if (!$rrd_exec_status) {
@@ -794,7 +856,7 @@ function handle__request($input, $read_socket) {
 						}
 					}
 
-					$rrd_cmd = 'last ' . $cmd_options[0];
+					$rrd_cmd = 'last ' . $rra_path_absolute;
 					rrdp_system__socket_write($read_socket, encrypt('__RRDLAST 201 ', $public_key) . "\r\n", 'msr_bytes_sent');
 					$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, $read_socket, $public_key, 1);
 					rrdp_system__socket_write($read_socket, encrypt(' END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');
@@ -815,11 +877,12 @@ function handle__request($input, $read_socket) {
 			break;
 		case 'RRDDUMP':
 			if ($cmd_options && is_array($cmd_options) && substr($cmd_options[0],-3) == 'rrd') {
-				$rra_path_absolute = rtrim($rrdp_config['path_rra'], '/') . '/' . ltrim($cmd_options[0], './');
+				$rra_path_absolute = rrdp_resolve_rra_path($cmd_options[0]);
 
-				if (file_exists($rra_path_absolute)) {
+				if ($rra_path_absolute !== false) {
 					if ($rrdcached_pid) {
-						$rrd_cmd         = 'flushcached ' . $cmd_options[0];
+						$rrd_cmd = 'flushcached ' . $rra_path_absolute;
+
 						$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, false, false, false, true);
 
 						if (!$rrd_exec_status) {
@@ -830,7 +893,7 @@ function handle__request($input, $read_socket) {
 						}
 					}
 
-					$rrd_cmd = 'dump ' . $cmd_options[0];
+					$rrd_cmd = 'dump ' . $rra_path_absolute;
 					rrdp_system__socket_write($read_socket, encrypt('__RRDDUMP 201 ', $public_key) . "\r\n", 'msr_bytes_sent');
 					$rrd_exec_status = rrdtool_pipe_execute($rrd_cmd . "\r\n", $rrdtool_pipes, $read_socket, $public_key, 1);
 					rrdp_system__socket_write($read_socket, encrypt(':__filemtime__:' . filemtime($rra_path_absolute) . ' END_OF_MSG', $public_key) . "\r\n", 'msr_bytes_sent');

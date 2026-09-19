@@ -48,14 +48,16 @@ if (file_exists('./include/global.php') & !file_exists('../rrdtool-proxy.php')) 
 }
 
 // setup defaults
-$debug     = false;
-$dryrun    = false;
-$avgnan    = 'avg';
-$rrdfile   = '';
-$std_kills = false;
-$var_kills = false;
-$html      = false;
-$backup    = false;
+$debug      = false;
+$dryrun     = false;
+$avgnan     = 'avg';
+$rrdfile    = '';
+$std_kills  = false;
+$var_kills  = false;
+$html       = false;
+$backup     = false;
+$config     = [];
+$new_output = [];
 
 if ($using_cacti) {
 	$method   = read_config_option('spikekill_method');
@@ -205,14 +207,17 @@ if ($rrdfile == '') {
 }
 
 // let's see if we can find rrdtool
-if (!$using_cacti) {
-	if (substr_count(PHP_OS, 'WIN')) {
-		$response = shell_exec('rrdtool.exe');
-	} else {
-		$response = shell_exec('rrdtool');
-	}
+$rrdtool_path = getenv('RRDP_RRDTOOL_PATH');
 
-	if (strlen($response)) {
+if ($rrdtool_path === false || $rrdtool_path === '') {
+	$rrdtool_path = $using_cacti ? read_config_option('path_rrdtool') : (substr_count(PHP_OS, 'WIN') ? 'rrdtool.exe' : 'rrdtool');
+}
+
+if (!$using_cacti) {
+	$response = removespikes_run_rrdtool($rrdtool_path, []);
+
+	if ($response !== false && strlen($response['stdout'] . $response['stderr'])) {
+		$response       = $response['stdout'] . $response['stderr'];
 		$response_array = explode(' ', $response);
 		print 'NOTE: Using ' . $response_array[0] . ' Version ' . $response_array[1] . "\n";
 	} else {
@@ -227,21 +232,26 @@ $seed = mt_rand();
 if ($using_cacti) {
 	if ($config['cacti_server_os'] == 'win32') {
 		$tempdir  = getenv('TEMP');
-		$xmlfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+		$xmlfile  = tempnam($tempdir, 'rrdproxy-dump-');
 		$bakfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 	} else {
 		$tempdir = '/tmp';
-		$xmlfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+		$xmlfile = tempnam($tempdir, 'rrdproxy-dump-');
 		$bakfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 	}
 } elseif (substr_count(PHP_OS, 'WIN')) {
 	$tempdir  = getenv('TEMP');
-	$xmlfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+	$xmlfile  = tempnam($tempdir, 'rrdproxy-dump-');
 	$bakfile  = $tempdir . '/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
 } else {
 	$tempdir = '/tmp';
-	$xmlfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.dump.' . $seed;
+	$xmlfile = tempnam($tempdir, 'rrdproxy-dump-');
 	$bakfile = '/tmp/' . str_replace('.rrd', '', basename($rrdfile)) . '.backup.' . $seed . '.rrd';
+}
+
+if ($xmlfile === false) {
+	print "FATAL: Unable to create a secure temporary file.\n";
+	exit(-12);
 }
 
 if ($html) {
@@ -255,10 +265,12 @@ if ($using_cacti) {
 // execute the dump command
 print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "NOTE: Creating XML file '$xmlfile' from '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 
-if ($using_cacti) {
-	shell_exec(read_config_option('path_rrdtool') . " dump $rrdfile > $xmlfile");
+$dump_result = removespikes_run_rrdtool($rrdtool_path, ['dump', $rrdfile]);
+
+if ($dump_result !== false && $dump_result['status'] === 0 && $dump_result['stdout'] !== '') {
+	file_put_contents($xmlfile, $dump_result['stdout'], LOCK_EX);
 } else {
-	shell_exec("rrdtool dump $rrdfile > $xmlfile");
+	unlink($xmlfile);
 }
 
 // read the xml file into an array
@@ -454,7 +466,10 @@ if (!$dryrun) {
 	if ($total_kills) {
 		if (writeXMLFile($new_output, $xmlfile)) {
 			if (backupRRDFile($rrdfile)) {
-				createRRDFileFromXML($xmlfile, $rrdfile);
+				if (!createRRDFileFromXML($xmlfile, $rrdfile)) {
+					print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "FATAL: Unable to restore '$rrdfile' from '$xmlfile'" . ($html ? "</td></tr>\n" : "\n");
+					exit(-14);
+				}
 			} else {
 				print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "FATAL: Unable to backup '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 			}
@@ -471,27 +486,78 @@ if ($html) {
 }
 
 // All Functions
+/**
+ * Restores an RRD file from its (spike-cleaned) XML dump via `rrdtool restore`.
+ *
+ * @param string $xmlfile
+ * @param string $rrdfile
+ *
+ * @return bool
+ */
 function createRRDFileFromXML($xmlfile, $rrdfile) {
-	global $using_cacti, $html;
+	global $html, $rrdtool_path;
 
 	// execute the dump command
 	print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . "NOTE: Re-Importing '$xmlfile' to '$rrdfile'" . ($html ? "</td></tr>\n" : "\n");
 
-	if ($using_cacti) {
-		$response = shell_exec(read_config_option('path_rrdtool') . " restore -f -r $xmlfile $rrdfile");
-	} else {
-		$response = shell_exec("rrdtool restore -f -r $xmlfile $rrdfile");
-	}
+	$result   = removespikes_run_rrdtool($rrdtool_path, ['restore', '-f', '-r', $xmlfile, $rrdfile]);
+	$response = $result === false ? 'Unable to start RRDtool' : $result['stdout'] . $result['stderr'];
 
 	if (strlen($response)) {
 		print ($html ? "<tr><td colspan='20' class='spikekill_note'>" : '') . $response . ($html ? "</td></tr>\n" : "\n");
 	}
+
+	return $result !== false && $result['status'] === 0;
 }
 
+/**
+ * Runs the rrdtool binary with the given argv-style arguments (no shell
+ * interpolation) and captures its combined stdout/stderr and exit status.
+ *
+ * @param string             $binary
+ * @param array<int, string> $arguments
+ *
+ * @return array{status: int, stdout: string, stderr: string}|false
+ */
+function removespikes_run_rrdtool($binary, $arguments) {
+	$descriptors = [
+		1 => ['pipe', 'w'],
+		2 => ['redirect', 1],
+	];
+	$process = proc_open(array_merge([$binary], $arguments), $descriptors, $pipes);
+
+	if (!is_resource($process)) {
+		return false;
+	}
+
+	$stdout = stream_get_contents($pipes[1]);
+	fclose($pipes[1]);
+	$status = proc_close($process);
+
+	return ['status' => $status, 'stdout' => $stdout, 'stderr' => ''];
+}
+
+/**
+ * Writes the (spike-cleaned) XML dump lines out to $xmlfile.
+ *
+ * @param array<int, string> $output
+ * @param string             $xmlfile
+ *
+ * @return int|false
+ */
 function writeXMLFile($output, $xmlfile) {
 	return file_put_contents($xmlfile, $output);
 }
 
+/**
+ * Copies $rrdfile into the configured (or temp) backup directory before it is
+ * modified, appending a random seed to the filename if a file of that name
+ * already exists there.
+ *
+ * @param string $rrdfile
+ *
+ * @return bool
+ */
 function backupRRDFile($rrdfile) {
 	global $using_cacti, $tempdir, $seed, $html;
 
@@ -516,6 +582,16 @@ function backupRRDFile($rrdfile) {
 	return copy($rrdfile, $backupdir . '/' . $newfile);
 }
 
+/**
+ * Computes each RRA/data-source's outlier-trimmed "variance" average (the mean
+ * of the samples after removing the top/bottom $outliers extremes), storing it
+ * into $rra[$rra_num][$ds_num]['variance_avg'].
+ *
+ * @param array<int, array<int, array<string, mixed>>>   $rra
+ * @param array<int, array<int, array<int, float|int>>>  $samples
+ *
+ * @return void
+ */
 function calculateVarianceAverages(&$rra, &$samples) {
 	global $outliers;
 
@@ -540,6 +616,17 @@ function calculateVarianceAverages(&$rra, &$samples) {
 	}
 }
 
+/**
+ * For every RRA/data-source, computes the standard deviation, average, and
+ * min/max cutoffs from the collected samples, then counts (and flags via
+ * $std_kills/$var_kills) how many samples fall outside the standard-deviation
+ * and variance thresholds.
+ *
+ * @param array<int, array<int, array<string, mixed>>>   $rra
+ * @param array<int, array<int, array<int, float|int>>>  $samples
+ *
+ * @return void
+ */
 function calculateOverallStatistics(&$rra, &$samples) {
 	global $percent, $stddev, $ds_min, $ds_max, $var_kills, $std_kills;
 
@@ -631,6 +718,14 @@ function calculateOverallStatistics(&$rra, &$samples) {
 	}
 }
 
+/**
+ * Prints a per-data-source summary table (plain text or HTML) of the computed
+ * statistics and kill counts for each RRA.
+ *
+ * @param array<int, array<int, array<string, mixed>>> $rra
+ *
+ * @return void
+ */
 function outputStatistics($rra) {
 	global $rra_cf, $rra_name, $ds_name, $rra_pdp, $html;
 
@@ -718,13 +813,24 @@ function outputStatistics($rra) {
 	}
 }
 
+/**
+ * Rewrites the dumped XML's <row> value lines, replacing any sample outside
+ * the computed thresholds with the RRA's average (or 'NaN'), up to $numspike
+ * replacements per RRA.
+ *
+ * @param array<int, string>                            $output
+ * @param array<int, array<int, array<string, mixed>>>  $rra
+ *
+ * @return array<int, string>
+ */
 function updateXML(&$output, &$rra) {
 	global $numspike, $percent, $avgnan, $method, $total_kills;
 
 	// variance subroutine
-	$rra_num = 0;
-	$ds_num  = 0;
-	$kills   = 0;
+	$rra_num   = 0;
+	$ds_num    = 0;
+	$kills     = 0;
+	$new_array = [];
 
 	if (sizeof($output)) {
 		foreach ($output as $line) {
@@ -758,7 +864,7 @@ function updateXML(&$output, &$rra) {
 							}
 						} else {
 							if (($dsvalue > $rra[$rra_num][$ds_num]['max_cutoff']) ||
-									($dsvalue < $rra[$rra_num][$ds_num]['min_cutoff'])) {
+								($dsvalue < $rra[$rra_num][$ds_num]['min_cutoff'])) {
 								if ($kills < $numspike) {
 									if ($avgnan == 'avg') {
 										$dsvalue = $rra[$rra_num][$ds_num]['average'];
@@ -797,7 +903,17 @@ function updateXML(&$output, &$rra) {
 	return $new_array;
 }
 
+/**
+ * Strips blank lines and `<!-- ... -->` XML comments from a dumped RRD file's
+ * lines.
+ *
+ * @param array<int, string> $output
+ *
+ * @return array<int, string>|null
+ */
 function removeComments(&$output) {
+	$new_array = [];
+
 	if (sizeof($output)) {
 		foreach ($output as $line) {
 			$line = trim($line);
@@ -831,6 +947,14 @@ function removeComments(&$output) {
 	}
 }
 
+/**
+ * Formats a PDP (primary data point) count as a human-readable duration
+ * (seconds, minutes, hours, or days) based on the RRD's step size.
+ *
+ * @param int $pdp
+ *
+ * @return string
+ */
 function displayTime($pdp) {
 	global $step;
 
@@ -857,6 +981,13 @@ function displayTime($pdp) {
 	}
 }
 
+/**
+ * Prints $string prefixed with "DEBUG: " when debug output is enabled.
+ *
+ * @param string $string
+ *
+ * @return void
+ */
 function debug($string) {
 	global $debug;
 
@@ -865,8 +996,16 @@ function debug($string) {
 	}
 }
 
+/**
+ * Computes the (population) standard deviation of a set of numeric samples.
+ *
+ * @param array<int, float|int> $samples
+ *
+ * @return float
+ */
 function standard_deviation($samples) {
-	$sample_count = count($samples);
+	$sample_count  = count($samples);
+	$sample_square = [];
 
 	for ($current_sample = 0; $sample_count > $current_sample; ++$current_sample) {
 		$sample_square[$current_sample] = pow($samples[$current_sample], 2);
@@ -876,6 +1015,11 @@ function standard_deviation($samples) {
 }
 
 // display_help - displays the usage of the function
+/**
+ * Prints removespikes' version banner and command-line usage/help text.
+ *
+ * @return void
+ */
 function display_help() {
 	global $using_cacti;
 

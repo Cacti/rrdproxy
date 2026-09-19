@@ -26,7 +26,7 @@ global $active_config;
 
 include('../vendor/autoload.php');
 
-use phpseclib3\Crypt\RSA;
+use phpseclib4\Crypt\RSA;
 
 $active_config = [
 	'version'                   => RRDP_VERSION,
@@ -57,11 +57,23 @@ $active_config = [
 	'rrdcache_write_threads'    => 4,
 	'enable_password'           => '',
 ];
+$rrdp_config         = [];
+$rrdp_config_tmp     = [];
+$rrdp_remote_clients = [];
+$rrdp_remote_proxies = [];
 
 wizard();
 
+/**
+ * Runs the interactive command-line configuration wizard: checks system
+ * requirements, prompts for and validates each configuration setting, generates
+ * or reuses the RSA key pair, and writes out the resulting configuration file.
+ *
+ * @return void
+ */
 function wizard() {
-	global $microtime_start, $active_config;
+	global $microtime_start, $active_config, $rrdp_config, $rrdp_config_tmp;
+	global $rrdp_remote_clients, $rrdp_remote_proxies;
 
 	define('WIZARD_RUNNING', 1);
 
@@ -218,8 +230,7 @@ function wizard() {
 		$public  = $private->getPublicKey();
 
 		rrd_system__system_boolean_message('create: Generate RSA key-pair (2048Bit)', [$private, $public], true);
-		rrd_system__system_boolean_message('  save: New RSA public key', file_put_contents('./include/public.key', $public), true);
-		rrd_system__system_boolean_message('  save: New RSA private key', file_put_contents('./include/private.key', $private), true);
+		rrd_system__system_boolean_message('  save: New RSA key pair', rrdp_write_key_pair('./include/public.key', (string) $public, './include/private.key', (string) $private), true);
 	}
 
 	$filter_options = ['options' => ['regexp' => '/[\s]*/']];
@@ -707,10 +718,20 @@ function wizard() {
 	wizard_handle_output(wizard_prompt_wordwrap('Example', $msg, 75), true, true);
 }
 
+/**
+ * Validates that $path (or the configured RRDtool path) is an absolute,
+ * executable RRDtool binary of at least version 1.5, printing an error and
+ * returning false otherwise.
+ *
+ * @param string $path
+ *
+ * @return string|false
+ */
 function wizard_verify_rrdtool($path) {
 	global $active_config;
 
 	$valid_path = false;
+	$msg        = 'Invalid RRDtool path.';
 
 	if (!$path) {
 		$path = $active_config['path_rrdtool'];
@@ -753,10 +774,19 @@ function wizard_verify_rrdtool($path) {
 	}
 }
 
+/**
+ * Validates that $path (or the configured rrdcached path) is an absolute,
+ * executable file, printing an error and returning false otherwise.
+ *
+ * @param string $path
+ *
+ * @return string|false
+ */
 function wizard_verify_rrdcached($path) {
 	global $active_config;
 
 	$valid_path = false;
+	$msg        = 'Invalid RRDCached path.';
 
 	if (!$path) {
 		$path = $active_config['path_rrdcached'];
@@ -782,6 +812,14 @@ function wizard_verify_rrdcached($path) {
 	}
 }
 
+/**
+ * Validates that $path (or the configured RRA path) is an absolute, readable,
+ * writable directory, printing an error and returning false otherwise.
+ *
+ * @param string $path
+ *
+ * @return string|false
+ */
 function wizard_verify_path($path) {
 	global $active_config;
 
@@ -812,10 +850,37 @@ function wizard_verify_path($path) {
 	}
 }
 
+/**
+ * Writes a wizard prompt/message to STDOUT, optionally clearing the screen first
+ * and/or surrounding the message with newlines.
+ *
+ * @param string $msg
+ * @param bool   $new_line
+ * @param bool   $new_line_after
+ * @param bool   $clear_commandline_screen
+ *
+ * @return void
+ */
 function wizard_handle_output($msg, $new_line = false, $new_line_after = false, $clear_commandline_screen = false) {
 	fwrite(STDOUT, ($clear_commandline_screen ? ANSI_ERASE_SCREEN . ANSI_ERASE_BUFFER . ANSI_POS_TOP_LEFT : '') . ($new_line ? PHP_EOL : '') . $msg . ($new_line_after ? PHP_EOL : ''));
 }
 
+/**
+ * Prompts for and reads a line from STDIN, re-prompting (with an optional help
+ * message) until the input passes the given filter_var() filter or, if
+ * $require_value is set, is non-empty.
+ *
+ * @param string       $msg
+ * @param int          $filter
+ * @param array<mixed>|false $filter_options
+ * @param string|false $filter_help_msg
+ * @param bool         $new_line
+ * @param bool         $new_line_after
+ * @param bool         $clear_commandline_screen
+ * @param bool         $require_value
+ *
+ * @return mixed
+ */
 function wizard_handle_input($msg, $filter = FILTER_DEFAULT, $filter_options = false, $filter_help_msg = false, $new_line = false, $new_line_after = false, $clear_commandline_screen = false, $require_value = false) {
 	$filtered_value = false;
 
@@ -843,6 +908,14 @@ function wizard_handle_input($msg, $filter = FILTER_DEFAULT, $filter_options = f
 	return false;
 }
 
+/**
+ * Builds the next lettered attribute prompt (a, b, ... z, aa, ab, ...), advancing
+ * $attribute_count for the following call.
+ *
+ * @param int $attribute_count
+ *
+ * @return array{text: string, ansi: string, padding: string}
+ */
 function wizard_get_prompt(&$attribute_count) {
 	$attr_part1 = $attribute_count % 26;
 	$attr_part2 = ($attribute_count - $attr_part1) / 26;
@@ -856,6 +929,14 @@ function wizard_get_prompt(&$attribute_count) {
 	return $attr_prompt;
 }
 
+/**
+ * Prints the wizard's page banner/title bar (e.g. "Page 2/9") for the given step.
+ *
+ * @param int    $page
+ * @param string $title
+ *
+ * @return void
+ */
 function wizard_handle_title($page, $title = '') {
 	$title_prefix = '   RRDtool Proxy Server Wizard';
 
@@ -867,13 +948,25 @@ function wizard_handle_title($page, $title = '') {
 	$title_spaces = strlen($title_prefix) + strlen($title_suffix);
 
 	if ($title_spaces > 75) {
-		$title_prefix = substr($title_prefix, 1, 75 - $title_suffix);
+		$title_prefix = substr($title_prefix, 1, 75 - strlen($title_suffix));
 		$title_spaces = 75;
 	}
 
 	wizard_handle_output(ANSI_BOLD . ANSI_YELLOW_FG . ANSI_BLUE_BG . $title_prefix .
 		str_repeat(' ', 80 - $title_spaces) . $title_suffix . ANSI_RESET, false, true, true);
 }
+/**
+ * Prompts for and applies a group of configuration settings, updating
+ * $active_config in place, persisting a temporary config file after each
+ * accepted value, and advancing the shared $attribute_count prompt counter.
+ *
+ * @param array<string, array<string, mixed>> $inputs
+ * @param array<string, mixed>                $active_config
+ * @param int                                  $attribute_count
+ * @param string                               $title
+ *
+ * @return void
+ */
 function wizard_handle_settings($inputs, &$active_config, &$attribute_count, $title = '') {
 	if (empty($title)) {
 		$title = '';
@@ -918,6 +1011,16 @@ function wizard_handle_settings($inputs, &$active_config, &$attribute_count, $ti
 	}
 }
 
+/**
+ * Word-wraps $msg to $length columns, indenting wrapped lines to align under an
+ * optional bold/colored "$prompt: " prefix.
+ *
+ * @param string $prompt
+ * @param string $msg
+ * @param int    $length
+ *
+ * @return string
+ */
 function wizard_prompt_wordwrap($prompt, $msg, $length) {
 	$prompt     = (empty($prompt) ? '' : $prompt . ': ');
 	$prompt_len = strlen($prompt);
