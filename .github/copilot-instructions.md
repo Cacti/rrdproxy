@@ -55,3 +55,18 @@ security-sensitive changes.
   store md5 fingerprints, and v4's default changed to sha256.
 - New feature/security/behavior changes should get an entry in `CHANGELOG.md` under
   `[Unreleased]`, prefixed `feature:`, `issue:`, or `security:`.
+
+## Repo Hygiene
+
+- `.gitignore` starts with a bare `.git*` line (to ignore stray `.git-*` scratch files),
+  which also silently matches `.gitattributes` and the `.github/` directory itself unless
+  negated. The negations (`!.github/`, `!.gitattributes`) are already present immediately
+  below it — if you ever touch `.gitignore`, keep those negation lines, otherwise new
+  `.github/**` files (workflows, this instructions file, PR templates) or `.gitattributes`
+  edits will silently fail to `git add` with no error.
+- `.gitattributes` is `* text=auto eol=lf` — this repo standardizes on LF line endings.
+- `main` and `develop` have diverged (as of 2026-09, `main` predates the `.gitattributes`/
+  gitignore-negation fix and the phpseclib 3→4 migration) — confirm which branch you're
+  actually on/branching from before assuming a fix already landed everywhere; don't assume
+  parity between the two.
+
